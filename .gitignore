@@ -1,0 +1,8 @@
+.DS_Store
+.env
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+backend/app/__pycache__/
+backend/app/api/__pycache__/
