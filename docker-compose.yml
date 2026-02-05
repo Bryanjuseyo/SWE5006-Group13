@@ -11,19 +11,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: always
 
-  pgadmin:
-      image: dpage/pgadmin4
-      environment:
-        PGADMIN_DEFAULT_EMAIL: admin@admin.com
-        PGADMIN_DEFAULT_PASSWORD: adminpassword
-      ports:
-        - "5050:80"
-      restart: always
-      depends_on:
-        - db
-      volumes:
-        - pgadmin_data:/var/lib/pgadmin
-        
   # backend:
   #   build: ./backend
   #   ports:
@@ -46,4 +33,3 @@ services:
 
 volumes:
   postgres_data:
-  pgadmin_data:
