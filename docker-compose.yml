@@ -10,18 +10,22 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cleanmatch_user -d cleanmatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # backend:
-  #   build: ./backend
-  #   ports:
-  #     - "5000:5000"
-  #   environment:
-  #     DATABASE_URL: postgresql://cleanmatch_user:securepassword123@db:5432/cleanmatch
-  #     JWT_SECRET_KEY: your-super-secret-jwt-key-change-this
-  #     FLASK_ENV: development
-  #   depends_on:
-  #     - db
-  #   restart: always
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://cleanmatch_user:securepassword123@db:5432/cleanmatch
+    restart: always
 
   # frontend:
   #   build: ./frontend
