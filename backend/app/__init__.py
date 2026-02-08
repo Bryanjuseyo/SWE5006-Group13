@@ -13,6 +13,12 @@ def create_app():
     bcrypt.init_app(app)
 
     from .api.health import bp as health_bp
+    from app.api.auth import auth_bp
+
+    # Health
     app.register_blueprint(health_bp, url_prefix="/api")
+
+    # Authentication
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
 
     return app
