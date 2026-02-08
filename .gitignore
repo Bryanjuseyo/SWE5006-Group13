@@ -10,3 +10,6 @@ backend/app/__pycache__/
 backend/app/api/__pycache__/
 backend/tests/__pycache__/
 .idea
+# Ignore all __pycache__ directories
+__pycache__/
+*.pyc
