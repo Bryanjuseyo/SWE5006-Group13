@@ -6,9 +6,6 @@ venv/
 .venv/
 backend/venv/
 backend/.venv/
-backend/app/__pycache__/
-backend/app/api/__pycache__/
-backend/tests/__pycache__/
 .idea
 # Ignore all __pycache__ directories
 __pycache__/
