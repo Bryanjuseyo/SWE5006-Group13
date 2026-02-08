@@ -13,3 +13,4 @@ backend/tests/__pycache__/
 # Ignore all __pycache__ directories
 __pycache__/
 *.pyc
+*.pyo
