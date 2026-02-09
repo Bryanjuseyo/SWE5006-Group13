@@ -3,6 +3,12 @@ from .config import Config
 from .extensions import cors
 from .models import db, bcrypt
 
+from .api.health import bp as health_bp
+from app.api.auth import auth_bp
+from app.api.end_user.routes import end_user_bp
+from app.api.cleaner.routes import cleaner_bp
+from app.api.admin.routes import admin_bp
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -12,8 +18,8 @@ def create_app():
     db.init_app(app)
     bcrypt.init_app(app)
 
-    from .api.health import bp as health_bp
-    from app.api.auth import auth_bp
+
+
 
     # Health
     app.register_blueprint(health_bp, url_prefix="/api")
@@ -21,4 +27,9 @@ def create_app():
     # Authentication
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
 
+    # Dashboard 
+    app.register_blueprint(end_user_bp, url_prefix="/api/end-user")
+    app.register_blueprint(cleaner_bp, url_prefix="/api/cleaner")
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
+    
     return app
