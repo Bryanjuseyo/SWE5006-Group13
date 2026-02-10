@@ -21,17 +21,18 @@ def test_non_admin_cannot_assign_roles(client):
     token = register_and_login(client, "user@test.com", "END_USER")
 
     res = client.put("/api/admin/users/123/role",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"role": "ADMIN"}
-    )
+                     headers={"Authorization": f"Bearer {token}"},
+                     json={"role": "ADMIN"}
+                     )
     assert res.status_code == 403
+
 
 def test_admin_can_assign_roles(client):
     admin_token = register_and_login(client, "admin@test.com", "ADMIN")
 
     res = client.put("/api/admin/users/123/role",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        json={"role": "CLEANER"}
-    )
+                     headers={"Authorization": f"Bearer {admin_token}"},
+                     json={"role": "CLEANER"}
+                     )
     # depends on whether user exists
     assert res.status_code in (200, 404)

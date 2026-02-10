@@ -3,6 +3,7 @@ from .config import Config
 from .extensions import cors
 from .models import db, bcrypt
 
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)

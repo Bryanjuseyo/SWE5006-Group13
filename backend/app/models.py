@@ -11,10 +11,12 @@ bcrypt = Bcrypt()
 # ENUMS
 # =============================================
 
+
 class UserRole(enum.Enum):
     end_user = 'end_user'
     cleaner = 'cleaner'
     administrator = 'administrator'
+
 
 class ServiceType(enum.Enum):
     partial = 'partial'
@@ -23,6 +25,7 @@ class ServiceType(enum.Enum):
 # =============================================
 # USER (Authentication)
 # =============================================
+
 
 class User(db.Model, UserMixin):
     __tablename__ = 'users'
@@ -56,6 +59,7 @@ class User(db.Model, UserMixin):
 # USER PROFILE (All Users)
 # =============================================
 
+
 class UserProfile(db.Model):
     __tablename__ = 'user_profiles'
 
@@ -84,6 +88,7 @@ class UserProfile(db.Model):
 # CLEANING SERVICES LOOKUP
 # =============================================
 
+
 class CleaningService(db.Model):
     __tablename__ = 'cleaning_services'
 
@@ -101,6 +106,7 @@ class CleaningService(db.Model):
 # =============================================
 # CLEANER PROFILE
 # =============================================
+
 
 class CleanerProfile(db.Model):
     __tablename__ = 'cleaner_profiles'
@@ -132,12 +138,23 @@ class CleanerProfile(db.Model):
 # CLEANER OFFERED SERVICES
 # =============================================
 
+
 class CleanerOfferedService(db.Model):
     __tablename__ = 'cleaner_offered_services'
 
     id = db.Column(db.BigInteger, primary_key=True)
-    cleaner_profile_id = db.Column(db.BigInteger, db.ForeignKey('cleaner_profiles.id', ondelete='CASCADE'), nullable=False)
-    cleaning_service_id = db.Column(db.Integer, db.ForeignKey('cleaning_services.id', ondelete='CASCADE'), nullable=False)
+    cleaner_profile_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            'cleaner_profiles.id',
+            ondelete='CASCADE'),
+        nullable=False)
+    cleaning_service_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'cleaning_services.id',
+            ondelete='CASCADE'),
+        nullable=False)
     custom_price = db.Column(db.Numeric(10, 2))
 
     cleaning_service = db.relationship('CleaningService')
@@ -157,11 +174,17 @@ class CleanerOfferedService(db.Model):
 # CLEANER AVAILABILITY
 # =============================================
 
+
 class CleanerAvailability(db.Model):
     __tablename__ = 'cleaner_availability'
 
     id = db.Column(db.BigInteger, primary_key=True)
-    cleaner_profile_id = db.Column(db.BigInteger, db.ForeignKey('cleaner_profiles.id', ondelete='CASCADE'), nullable=False)
+    cleaner_profile_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            'cleaner_profiles.id',
+            ondelete='CASCADE'),
+        nullable=False)
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time)
