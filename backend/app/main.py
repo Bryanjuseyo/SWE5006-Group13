@@ -1,8 +1,8 @@
+from app.models import db
+from app import create_app
 from dotenv import load_dotenv
 load_dotenv()
 
-from app import create_app
-from app.models import db
 
 app = create_app()
 
