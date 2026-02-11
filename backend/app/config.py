@@ -10,4 +10,3 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET = os.getenv("JWT_SECRE", "dev-jwt-secret")
     JWT_EXP_HOURS = int(os.getenv("JWT_EXP_HOURS", 24))
-    

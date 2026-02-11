@@ -4,20 +4,24 @@ from app.api.auth.decorators import jwt_required, roles_required
 
 cleaner_bp = Blueprint("cleaner", __name__)
 
+
 @cleaner_bp.before_request
 @jwt_required
 @roles_required("cleaner")
 def _guard():
     pass
 
+
 @cleaner_bp.get("/dashboard")
 def dashboard():
     return jsonify(message="Cleaner dashboard")
+
 
 @cleaner_bp.get("/profile")
 def get_profile():
     user_id = g.user["user_id"]
     return jsonify(CleanerProfileService.get_cleaner_profile(user_id)), 200
+
 
 @cleaner_bp.put("/profile")
 def update_profile():

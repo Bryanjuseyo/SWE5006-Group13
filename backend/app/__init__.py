@@ -10,6 +10,7 @@ from app.api.cleaner.routes import cleaner_bp
 from app.api.admin.routes import admin_bp
 from app.api.profile import profile_bp
 
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -25,11 +26,11 @@ def create_app():
     # Authentication
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
 
-    # Dashboard 
+    # Dashboard
     app.register_blueprint(end_user_bp, url_prefix="/api/end-user")
     app.register_blueprint(cleaner_bp, url_prefix="/api/cleaner")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
-    
+
     # View / Update profile
     app.register_blueprint(profile_bp, url_prefix="/api")
 

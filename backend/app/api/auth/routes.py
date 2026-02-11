@@ -3,6 +3,7 @@ from app.services.auth_service import AuthService
 
 auth_bp = Blueprint("auth", __name__)
 
+
 @auth_bp.post("/register")
 def register():
     data = request.get_json(silent=True) or {}
@@ -25,6 +26,7 @@ def register():
 
         status = 409 if error == "duplicate_email" else 400
         return jsonify({"error": error, "message": message}), status
+
 
 @auth_bp.post("/login")
 def login():

@@ -19,7 +19,6 @@ def test_register_success(client, mocker):
     assert body["user"]["email"] == "a@test.com"
 
 
-
 def test_login_success_returns_jwt(client, mocker):
     mocker.patch(
         "app.services.auth_service.AuthService.login_user",
@@ -64,7 +63,8 @@ def test_register_invalid_email_returns_400(client, mocker):
 def test_register_weak_password_returns_400(client, mocker):
     mocker.patch(
         "app.services.auth_service.AuthService.register_user",
-        side_effect=ValueError("invalid_password|Password must be at least 8 characters and contain letters and numbers.")
+        side_effect=ValueError(
+            "invalid_password|Password must be at least 8 characters and contain letters and numbers.")
     )
 
     res = client.post("/api/auth/register", json={

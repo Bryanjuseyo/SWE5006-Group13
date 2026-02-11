@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 
 from app.models import db, CleanerProfile, ServiceType
 
+
 class CleanerProfileService:
     @staticmethod
     def get_cleaner_profile(user_id: int) -> Dict[str, Any]:

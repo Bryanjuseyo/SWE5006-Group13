@@ -10,6 +10,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_MINUTES = 15
 
+
 class AuthService:
 
     # =============================================

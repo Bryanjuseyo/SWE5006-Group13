@@ -4,6 +4,7 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 
 from app.services.jwt_service import decode_token  # your decode helper
 
+
 def jwt_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
@@ -26,6 +27,7 @@ def jwt_required(fn):
         }
         return fn(*args, **kwargs)
     return wrapper
+
 
 def roles_required(*allowed_roles: str):
     def decorator(fn):

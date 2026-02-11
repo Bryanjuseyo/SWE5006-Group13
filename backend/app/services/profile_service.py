@@ -4,6 +4,7 @@ from app.models import db, User, UserProfile
 
 PHONE_RE = re.compile(r"^[89]\d{7}$")
 
+
 class ProfileService:
     @staticmethod
     def get_profile(user_id: int) -> Dict[str, Any]:
