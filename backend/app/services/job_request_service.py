@@ -1,5 +1,5 @@
-from typing import Dict, Any, Optional, List
-from datetime import datetime, date, time
+from typing import Dict, Any, Optional
+from datetime import datetime, date
 
 from sqlalchemy import or_
 from app.models import db, JobRequest, JobStatus, ServiceType
