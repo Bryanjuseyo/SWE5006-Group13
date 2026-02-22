@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 from sqlalchemy import or_
 from app.models import db, JobRequest, JobStatus, ServiceType
@@ -104,7 +104,9 @@ class JobRequestService:
         """
         Update job request details
         """
-        job_request = JobRequest.query.filter_by(id=job_request_id).first()
+        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
+            JobRequest.deleted_at.is_(None)
+        ).first()
         if not job_request:
             raise ValueError("not_found|Job request not found.")
 
@@ -200,7 +202,9 @@ class JobRequestService:
         Delete a job request.
         Only the end user who created the request can delete it.
         """
-        job_request = JobRequest.query.filter_by(id=job_request_id).first()
+        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
+            JobRequest.deleted_at.is_(None)
+        ).first()
         if not job_request:
             raise ValueError("not_found|Job request not found.")
 
@@ -214,7 +218,7 @@ class JobRequestService:
                 "invalid_status|Cannot delete a job request that is in progress or completed."
             )
 
-        db.session.delete(job_request)
+        job_request.deleted_at = datetime.now(timezone.utc)
         db.session.commit()
 
         return {"message": "Job request deleted successfully."}
@@ -226,7 +230,9 @@ class JobRequestService:
         End users can only view their own requests.
         Cleaners can view requests assigned to them or unassigned pending requests.
         """
-        job_request = JobRequest.query.filter_by(id=job_request_id).first()
+        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
+            JobRequest.deleted_at.is_(None)
+        ).first()
         if not job_request:
             raise ValueError("not_found|Job request not found.")
 
@@ -259,7 +265,7 @@ class JobRequestService:
             query = JobRequest.query.filter(
                 or_(
                     JobRequest.cleaner_id == user_id,
-                    (JobRequest.cleaner_id is None) & (JobRequest.status == JobStatus.pending)
+                    (JobRequest.cleaner_id.is_(None)) & (JobRequest.status == JobStatus.pending)
                 )
             )
         else:
@@ -274,6 +280,9 @@ class JobRequestService:
             except ValueError:
                 valid = ", ".join([s.value for s in JobStatus])
                 raise ValueError(f"invalid_status|status must be one of: {valid}.")
+
+        # Exclude soft-deleted records
+        query = query.filter(JobRequest.deleted_at.is_(None))
 
         # Order by most recent first
         query = query.order_by(JobRequest.created_at.desc())
@@ -293,7 +302,9 @@ class JobRequestService:
         - End users can cancel their pending/confirmed requests
         - Cleaners can confirm, start, and complete assigned jobs
         """
-        job_request = JobRequest.query.filter_by(id=job_request_id).first()
+        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
+            JobRequest.deleted_at.is_(None)
+        ).first()
         if not job_request:
             raise ValueError("not_found|Job request not found.")
 

@@ -9,7 +9,7 @@ from app.models import JobStatus
 def test_view_not_found_raises_error(mocker):
     """Viewing non-existent job request should raise error."""
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = None
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = None
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -25,7 +25,7 @@ def test_end_user_view_other_user_request_raises_error(mocker):
     mock_job_request.cleaner_id = None
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -42,7 +42,7 @@ def test_cleaner_can_view_unassigned_pending(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "status": "pending", "cleaner_id": None}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     result = JobRequestService.get_job_request(job_request_id=1, user_id=5, role="cleaner")
@@ -57,7 +57,7 @@ def test_cleaner_forbidden_for_other_cleaners_job_request(mocker):
     mock_job_request.status = JobStatus.confirmed
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -73,7 +73,7 @@ def test_get_success(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "title": "Test"}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     result = JobRequestService.get_job_request(job_request_id=1, user_id=1, role="end_user")

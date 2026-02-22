@@ -10,7 +10,7 @@ from app.models import JobStatus
 def test_not_found_raises_error(mocker):
     """Updating status of non-existent job request should raise error."""
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = None
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = None
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -28,7 +28,7 @@ def test_invalid_status_raises_error(mocker):
     mock_job_request.status = JobStatus.pending
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -47,7 +47,7 @@ def test_end_user_cannot_set_non_cancel(mocker):
     mock_job_request.status = JobStatus.confirmed
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -67,7 +67,7 @@ def test_end_user_cancel_no_cleaner_raises_error(mocker):
     mock_job_request.status = JobStatus.pending
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -88,7 +88,7 @@ def test_end_user_cancel_with_cleaner_success(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "status": "cancelled"}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
 
@@ -109,7 +109,7 @@ def test_cleaner_claim_unassigned_job_success(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "status": "confirmed", "cleaner_id": 5}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
 
@@ -129,7 +129,7 @@ def test_cleaner_cannot_skip_to_completed_on_unassigned(mocker):
     mock_job_request.status = JobStatus.pending
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -148,7 +148,7 @@ def test_cleaner_start_job_success(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "status": "in_progress"}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
 
@@ -167,7 +167,7 @@ def test_cleaner_invalid_transition(mocker):
     mock_job_request.status = JobStatus.confirmed  # must go through in_progress first
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -187,7 +187,7 @@ def test_cleaner_complete_job_success(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "status": "completed"}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
 
