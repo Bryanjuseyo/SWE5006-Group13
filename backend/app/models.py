@@ -22,6 +22,14 @@ class ServiceType(enum.Enum):
     partial = 'partial'
     full = 'full'
 
+
+class JobStatus(enum.Enum):
+    pending = 'pending'
+    confirmed = 'confirmed'
+    in_progress = 'in_progress'
+    completed = 'completed'
+    cancelled = 'cancelled'
+
 # =============================================
 # USER (Authentication)
 # =============================================
@@ -36,6 +44,9 @@ class User(db.Model, UserMixin):
     role = db.Column(db.Enum(UserRole), default=UserRole.end_user, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
     updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_login_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
     profile = db.relationship('UserProfile', backref='user', uselist=False, cascade='all, delete-orphan')
@@ -203,4 +214,65 @@ class CleanerAvailability(db.Model):
             'end_date': self.end_date.isoformat(),
             'start_time': self.start_time.isoformat() if self.start_time else None,
             'end_time': self.end_time.isoformat() if self.end_time else None
+        }
+
+# =============================================
+# JOB REQUESTS
+# =============================================
+
+
+class JobRequest(db.Model):
+    __tablename__ = 'job_requests'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    end_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False
+    )
+    cleaner_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True
+    )
+
+    # Job details
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    service_type = db.Column(db.Enum(ServiceType), nullable=False)
+    location = db.Column(db.Text, nullable=False)
+
+    # Scheduling
+    preferred_date = db.Column(db.Date, nullable=False)
+    preferred_time_start = db.Column(db.Time, nullable=True)
+    preferred_time_end = db.Column(db.Time, nullable=True)
+
+    # Status
+    status = db.Column(db.Enum(JobStatus), default=JobStatus.pending, nullable=False)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    end_user = db.relationship('User', foreign_keys=[end_user_id], backref='job_requests_as_client')
+    cleaner = db.relationship('User', foreign_keys=[cleaner_id], backref='job_requests_as_cleaner')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'end_user_id': self.end_user_id,
+            'cleaner_id': self.cleaner_id,
+            'title': self.title,
+            'description': self.description,
+            'service_type': self.service_type.value if self.service_type else None,
+            'location': self.location,
+            'preferred_date': self.preferred_date.isoformat() if self.preferred_date else None,
+            'preferred_time_start': self.preferred_time_start.isoformat() if self.preferred_time_start else None,
+            'preferred_time_end': self.preferred_time_end.isoformat() if self.preferred_time_end else None,
+            'status': self.status.value,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'end_user': self.end_user.to_dict() if self.end_user else None,
+            'cleaner': self.cleaner.to_dict() if self.cleaner else None
         }
