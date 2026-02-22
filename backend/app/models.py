@@ -253,6 +253,7 @@ class JobRequest(db.Model):
     # Timestamps
     created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
     updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True, default=None)
 
     # Relationships
     end_user = db.relationship('User', foreign_keys=[end_user_id], backref='job_requests_as_client')

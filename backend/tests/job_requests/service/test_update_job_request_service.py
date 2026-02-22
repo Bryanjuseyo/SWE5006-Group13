@@ -11,7 +11,7 @@ from tests.job_requests.service.conftest import FUTURE_DATE, PAST_DATE
 def test_not_found_raises_error(mocker):
     """Updating non-existent job request should raise error."""
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = None
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = None
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -28,7 +28,7 @@ def test_not_owner_raises_error(mocker):
     mock_job_request.end_user_id = 2  # different user
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -46,7 +46,7 @@ def test_completed_raises_error(mocker):
     mock_job_request.status = JobStatus.completed
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -66,7 +66,7 @@ def test_past_date_raises_error(mocker):
     mock_job_request.preferred_time_end = None
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -93,7 +93,7 @@ def test_past_start_time_raises_error(mocker):
     mock_job_request.preferred_time_end = None
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     mock_dt = mocker.MagicMock()
@@ -122,7 +122,7 @@ def test_equal_times_raises_error(mocker):
     mock_job_request.preferred_time_end = None
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -151,7 +151,7 @@ def test_update_success(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "title": "Updated"}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.first.return_value = mock_job_request
+    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
 
