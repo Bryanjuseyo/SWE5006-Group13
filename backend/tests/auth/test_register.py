@@ -18,6 +18,7 @@ def test_register_success(client, mocker):
     assert body is not None
     assert body["user"]["email"] == "a@test.com"
 
+
 def test_register_invalid_email_returns_400(client, mocker):
     mocker.patch(
         "app.services.auth_service.AuthService.register_user",

@@ -259,7 +259,7 @@ class JobRequestService:
             query = JobRequest.query.filter(
                 or_(
                     JobRequest.cleaner_id == user_id,
-                    (JobRequest.cleaner_id == None) & (JobRequest.status == JobStatus.pending)
+                    (JobRequest.cleaner_id is None) & (JobRequest.status == JobStatus.pending)
                 )
             )
         else:
@@ -356,4 +356,3 @@ class JobRequestService:
             "message": f"Job request status updated to {new_status}.",
             "job_request": job_request.to_dict()
         }
-

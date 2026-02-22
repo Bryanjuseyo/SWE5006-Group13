@@ -175,6 +175,7 @@ def test_end_time_not_after_start_returns_400(client, patch_decode_token, bearer
     assert body["error"] == "invalid_time"
     assert "strictly after" in body["message"]
 
+
 def test_no_token_returns_401(client):
     """Creating job request without token should return 401."""
     res = client.post("/api/job-requests/", json={"title": "Test"})

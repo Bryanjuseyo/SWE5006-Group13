@@ -1,3 +1,7 @@
+from app.models import db as _db
+from app import create_app
+import pytest
+from testcontainers.postgres import PostgresContainer as _PostgresContainer
 import atexit
 import os
 import sys
@@ -10,16 +14,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # config.py reads DATABASE_URL from the environment, so setting it here means
 # Flask-SQLAlchemy will build its engine with the pg8000 URL for testing
 # ---------------------------------------------------------------------------
-from testcontainers.postgres import PostgresContainer as _PostgresContainer
 
 _container = _PostgresContainer("postgres:17-alpine", driver="pg8000")
 _container.start()
 os.environ["DATABASE_URL"] = _container.get_connection_url()
 atexit.register(_container.stop)
-
-import pytest
-from app import create_app
-from app.models import db as _db
 
 
 @pytest.fixture(scope="session")

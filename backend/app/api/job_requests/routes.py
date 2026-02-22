@@ -152,5 +152,3 @@ def update_job_status(job_request_id):
         return jsonify(result), 200
     except ValueError as e:
         return _handle_error(e)
-
-
