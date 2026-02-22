@@ -28,7 +28,7 @@ export default function LoginPage() {
       localStorage.setItem('cm_user', JSON.stringify(res.user));
 
       // for now go home; later we’ll route to /dashboard
-      navigate('/', { replace: true });
+      navigate('/job-requests', { replace: true });
     } catch (err: any) {
       setError(err?.message || 'Login failed.');
     } finally {
