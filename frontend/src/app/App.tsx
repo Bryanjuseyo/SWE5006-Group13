@@ -11,6 +11,9 @@ import ForbiddenPage from '../pages/ForbiddenPage';
 
 import { RequireAuth, RequireRole } from '../auth/guards';
 
+import ProfilePage from '../pages/ProfilePage';
+import CleanerProfilePage from '../pages/CleanerProfilePage';
+
 // (Profile pages next – we’ll add after this step)
 export default function App() {
   return (
@@ -58,6 +61,24 @@ export default function App() {
       <Route path="/forbidden" element={<ForbiddenPage />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
+
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth>
+            <ProfilePage />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/cleaner/profile"
+        element={
+          <RequireRole role="cleaner">
+            <CleanerProfilePage />
+          </RequireRole>
+        }
+      />
     </Routes>
   );
 }
