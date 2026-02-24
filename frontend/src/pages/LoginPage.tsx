@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { login } from '../api/auth';
+import { setAuth } from '../auth/storage';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -22,13 +23,9 @@ export default function LoginPage() {
     try {
       setLoading(true);
       const res = await login({ email: email.trim().toLowerCase(), password });
-
-      // store token (recommended option A)
-      localStorage.setItem('cm_token', res.token);
-      localStorage.setItem('cm_user', JSON.stringify(res.user));
-
-      // for now go home; later we’ll route to /dashboard
-      navigate('/job-requests', { replace: true });
+      
+      setAuth(res.token, res.user);
+      navigate('/dashboard', { replace: true });
     } catch (err: any) {
       setError(err?.message || 'Login failed.');
     } finally {

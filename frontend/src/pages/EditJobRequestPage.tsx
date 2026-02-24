@@ -7,6 +7,7 @@ import {
   type ServiceType,
   type JobRequest,
 } from '../api/job_requests';
+import { getToken, getUser } from '../auth/storage';
 
 export default function EditJobRequestPage() {
   const navigate = useNavigate();
@@ -24,8 +25,8 @@ export default function EditJobRequestPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const token = localStorage.getItem('cm_token');
-  const user = JSON.parse(localStorage.getItem('cm_user') || '{}');
+  const token = getToken();
+  const user = getUser();
 
   useEffect(() => {
     if (!token) {
