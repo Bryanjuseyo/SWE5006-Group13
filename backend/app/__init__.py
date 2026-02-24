@@ -3,6 +3,8 @@ from .config import Config
 from .extensions import cors
 from .models import db, bcrypt
 
+from flask_cors import CORS
+
 from .api.health import bp as health_bp
 from app.api.auth import auth_bp
 from app.api.end_user.routes import end_user_bp
@@ -17,6 +19,7 @@ def create_app():
     app.config.from_object(Config)
 
     cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 
     db.init_app(app)
     bcrypt.init_app(app)

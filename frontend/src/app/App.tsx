@@ -7,17 +7,106 @@ import CreateJobRequestPage from '../pages/CreateJobRequestPage';
 import EditJobRequestPage from '../pages/EditJobRequestPage';
 import JobRequestDetailPage from '../pages/JobRequestDetailPage';
 
+import DashboardPage from '../pages/DashboardPage';
+import AdminDashboard from '../pages/AdminDashboard';
+import CleanerDashboard from '../pages/CleanerDashboard';
+import EndUserDashboard from '../pages/EndUserDashboard';
+import ForbiddenPage from '../pages/ForbiddenPage';
+
+import { RequireAuth, RequireRole } from '../auth/guards';
+
+import ProfilePage from '../pages/ProfilePage';
+import CleanerProfilePage from '../pages/CleanerProfilePage';
+
+// (Profile pages next – we’ll add after this step)
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/job-requests" element={<JobRequestListPage />} />
-      <Route path="/job-requests/new" element={<CreateJobRequestPage />} />
-      <Route path="/job-requests/:id" element={<JobRequestDetailPage />} />
-      <Route path="/job-requests/:id/edit" element={<EditJobRequestPage />} />
+      <Route path="/job-requests" element={
+        <RequireAuth>
+          <JobRequestListPage />
+        </RequireAuth>
+        } 
+      />
+      <Route path="/job-requests/new" element={
+        <RequireAuth>
+          <CreateJobRequestPage />
+        </RequireAuth>
+        } 
+      />
+      <Route path="/job-requests/:id" element={
+        <RequireAuth>
+          <JobRequestDetailPage />
+        </RequireAuth>
+        } 
+      />
+      <Route path="/job-requests/:id/edit" element={
+        <RequireAuth>
+          <EditJobRequestPage />
+        </RequireAuth>
+        } 
+      />
+
+      <Route
+        path="/dashboard"
+        element={
+          <RequireAuth>
+            <DashboardPage />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/dashboard/end-user"
+        element={
+          <RequireRole role="end_user">
+            <EndUserDashboard />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/dashboard/cleaner"
+        element={
+          <RequireRole role="cleaner">
+            <CleanerDashboard />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/dashboard/admin"
+        element={
+          <RequireRole role="administrator">
+            <AdminDashboard />
+          </RequireRole>
+        }
+      />
+
+      <Route path="/forbidden" element={<ForbiddenPage />} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
+
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth>
+            <ProfilePage />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/cleaner/profile"
+        element={
+          <RequireRole role="cleaner">
+            <CleanerProfilePage />
+          </RequireRole>
+        }
+      />
     </Routes>
   );
 }
