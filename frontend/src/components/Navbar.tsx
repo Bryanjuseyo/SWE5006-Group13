@@ -14,7 +14,7 @@ export default function Navbar() {
   return (
     <nav className="navbar bg-white border-bottom">
       <div className="container">
-        <Link to="/dashboard" className="navbar-brand m-0">
+        <Link to={user ? '/dashboard' : '/login'} className="navbar-brand m-0">
           <Logo size="sm" />
         </Link>
 
@@ -31,6 +31,11 @@ export default function Navbar() {
           ) : (
             <>
               <span className="text-muted small me-2">{user.email}</span>
+              {user.role === 'cleaner' && (
+                <Link to="/cleaner/profile" className="btn btn-outline-secondary btn-sm">
+                  Cleaner Profile
+                </Link>
+              )}
               <Link to="/profile" className="btn btn-outline-primary btn-sm">
                 Profile
               </Link>

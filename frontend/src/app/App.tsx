@@ -2,6 +2,10 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
+import JobRequestListPage from '../pages/JobRequestListPage';
+import CreateJobRequestPage from '../pages/CreateJobRequestPage';
+import EditJobRequestPage from '../pages/EditJobRequestPage';
+import JobRequestDetailPage from '../pages/JobRequestDetailPage';
 
 import DashboardPage from '../pages/DashboardPage';
 import AdminDashboard from '../pages/AdminDashboard';
@@ -21,6 +25,30 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/job-requests" element={
+        <RequireAuth>
+          <JobRequestListPage />
+        </RequireAuth>
+        } 
+      />
+      <Route path="/job-requests/new" element={
+        <RequireAuth>
+          <CreateJobRequestPage />
+        </RequireAuth>
+        } 
+      />
+      <Route path="/job-requests/:id" element={
+        <RequireAuth>
+          <JobRequestDetailPage />
+        </RequireAuth>
+        } 
+      />
+      <Route path="/job-requests/:id/edit" element={
+        <RequireAuth>
+          <EditJobRequestPage />
+        </RequireAuth>
+        } 
+      />
 
       <Route
         path="/dashboard"

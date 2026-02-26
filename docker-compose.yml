@@ -27,13 +27,15 @@ services:
       DATABASE_URL: postgresql://cleanmatch_user:securepassword123@db:5432/cleanmatch
     restart: always
 
-  # frontend:
-  #   build: ./frontend
-  #   ports:
-  #     - "80:3000"
-  #   depends_on:
-  #     - backend
-  #   restart: always
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: always
+
 
 volumes:
   postgres_data:

@@ -1,1 +1,1 @@
-from .routes import cleaner_bp
+from .routes import cleaner_bp  # noqa: F401

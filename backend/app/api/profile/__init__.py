@@ -1,1 +1,1 @@
-from .routes import profile_bp
+from .routes import profile_bp  # noqa: F401

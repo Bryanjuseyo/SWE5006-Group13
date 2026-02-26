@@ -11,6 +11,7 @@ from app.api.end_user.routes import end_user_bp
 from app.api.cleaner.routes import cleaner_bp
 from app.api.admin.routes import admin_bp
 from app.api.profile import profile_bp
+from app.api.job_requests.routes import job_requests_bp
 
 
 def create_app():
@@ -36,5 +37,8 @@ def create_app():
 
     # View / Update profile
     app.register_blueprint(profile_bp, url_prefix="/api")
+
+    # Job Requests
+    app.register_blueprint(job_requests_bp, url_prefix="/api/job-requests")
 
     return app
