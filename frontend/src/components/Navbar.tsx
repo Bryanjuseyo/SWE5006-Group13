@@ -14,7 +14,7 @@ export default function Navbar() {
   return (
     <nav className="navbar bg-white border-bottom">
       <div className="container">
-        <Link to="/" className="navbar-brand m-0">
+        <Link to="/dashboard" className="navbar-brand m-0">
           <Logo size="sm" />
         </Link>
 
