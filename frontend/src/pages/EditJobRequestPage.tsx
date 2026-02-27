@@ -9,6 +9,9 @@ import {
 } from '../api/job_requests';
 import { getToken, getUser } from '../auth/storage';
 
+import { listCleaners } from "../api/cleaners";
+import type { CleanerListItem } from "../api/cleaners";
+
 export default function EditJobRequestPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -21,6 +24,8 @@ export default function EditJobRequestPage() {
   const [preferredDate, setPreferredDate] = useState('');
   const [preferredTimeStart, setPreferredTimeStart] = useState('');
   const [preferredTimeEnd, setPreferredTimeEnd] = useState('');
+  const [cleaners, setCleaners] = useState<CleanerListItem[]>([]);
+  const [preferredCleanerId, setPreferredCleanerId] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +45,20 @@ export default function EditJobRequestPage() {
     fetchJobRequest();
   }, [token, id]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await listCleaners();
+        if (mounted) setCleaners(res.cleaners);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
   async function fetchJobRequest() {
     try {
       setLoading(true);
@@ -56,6 +75,7 @@ export default function EditJobRequestPage() {
       setPreferredDate(job.preferred_date || '');
       setPreferredTimeStart(job.preferred_time_start || '');
       setPreferredTimeEnd(job.preferred_time_end || '');
+      setPreferredCleanerId(job.cleaner_id ?? "");
     } catch (err: any) {
       setError(err?.message || 'Failed to load job request.');
     } finally {
@@ -114,6 +134,7 @@ export default function EditJobRequestPage() {
           preferred_date: preferredDate,
           preferred_time_start: preferredTimeStart || undefined,
           preferred_time_end: preferredTimeEnd || undefined,
+          cleaner_id: preferredCleanerId === "" ? null : preferredCleanerId,
         },
         token!
       );
@@ -280,7 +301,29 @@ export default function EditJobRequestPage() {
               />
             </div>
           </div>
-
+          <div className="mb-3">
+            <label className="form-label">Preferred Cleaner (optional)</label>
+            <select
+              className="form-select"
+              value={preferredCleanerId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPreferredCleanerId(v === "" ? "" : Number(v));
+              }}
+            >
+              <option value="">No preference</option>
+              {cleaners.map((c) => (
+                <option key={c.user_id} value={c.user_id}>
+                  {c.first_name} {c.last_name} • {c.cleaner_profile.service_type} •{" "}
+                  {c.cleaner_profile.hourly_rate != null ? `$${c.cleaner_profile.hourly_rate}/hr` : "Rate N/A"} •{" "}
+                  {c.cleaner_profile.years_experience} yrs
+                </option>
+              ))}
+            </select>
+            <div className="form-text">
+              You can change preferred cleaner while the job request is still pending.
+            </div>
+          </div>
           <div className="d-flex gap-2">
             <button className="btn btn-primary" disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}

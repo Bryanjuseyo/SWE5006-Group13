@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, date, timezone
 
 from sqlalchemy import or_
-from app.models import db, JobRequest, JobStatus, ServiceType
+from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole
 
 
 class JobRequestService:
@@ -17,6 +17,7 @@ class JobRequestService:
         allowed = {
             "title", "description", "service_type", "location",
             "preferred_date", "preferred_time_start", "preferred_time_end",
+            "cleaner_id",
         }
         updates = {k: data.get(k) for k in allowed if k in data}
 
@@ -80,6 +81,10 @@ class JobRequestService:
         if start_time and end_time and end_time <= start_time:
             raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
 
+        # Validate cleaner
+        if "cleaner_id" in updates:
+            updates["cleaner_id"] = JobRequestService._validate_cleaner_id(updates.get("cleaner_id"))
+
         # Create job request
         job_request = JobRequest(
             end_user_id=end_user_id,
@@ -124,6 +129,7 @@ class JobRequestService:
         allowed = {
             "title", "description", "service_type", "location",
             "preferred_date", "preferred_time_start", "preferred_time_end",
+            "cleaner_id",
         }
         updates = {k: data.get(k) for k in allowed if k in data}
 
@@ -184,6 +190,12 @@ class JobRequestService:
         end_time = updates.get("preferred_time_end", job_request.preferred_time_end)
         if start_time and end_time and end_time <= start_time:
             raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
+        
+        # Validate cleaner
+        if "cleaner_id" in updates:
+            if job_request.status != JobStatus.pending:
+                raise ValueError("invalid_status|Cannot change preferred cleaner unless job is pending.")
+            updates["cleaner_id"] = JobRequestService._validate_cleaner_id(updates.get("cleaner_id"))
 
         # Apply updates
         for k, v in updates.items():
@@ -367,3 +379,18 @@ class JobRequestService:
             "message": f"Job request status updated to {new_status}.",
             "job_request": job_request.to_dict()
         }
+    
+    # Helper for cleaner validation
+    @staticmethod
+    def _validate_cleaner_id(cleaner_id: int | None) -> int | None:
+        if cleaner_id is None:
+            return None
+
+        cleaner = User.query.get(cleaner_id)
+        if not cleaner:
+            raise ValueError("not_found|Selected cleaner not found")
+
+        if cleaner.role != UserRole.cleaner:
+            raise ValueError("invalid_request|Selected user is not a cleaner")
+
+        return cleaner_id
