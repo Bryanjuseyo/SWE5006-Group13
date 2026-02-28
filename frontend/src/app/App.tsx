@@ -18,7 +18,8 @@ import { RequireAuth, RequireRole } from '../auth/guards';
 import ProfilePage from '../pages/ProfilePage';
 import CleanerProfilePage from '../pages/CleanerProfilePage';
 
-// (Profile pages next – we’ll add after this step)
+import ViewCleanersPage from '../pages/ViewCleanersPage';
+
 export default function App() {
   return (
     <Routes>
@@ -104,6 +105,15 @@ export default function App() {
         element={
           <RequireRole role="cleaner">
             <CleanerProfilePage />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/cleaners"
+        element={
+          <RequireRole role="end_user">
+            <ViewCleanersPage />
           </RequireRole>
         }
       />

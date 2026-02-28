@@ -1,7 +1,7 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 from decimal import Decimal, InvalidOperation
 
-from app.models import db, CleanerProfile, ServiceType
+from app.models import db, CleanerProfile, ServiceType, User, UserProfile, UserRole
 
 
 class CleanerProfileService:
@@ -59,3 +59,30 @@ class CleanerProfileService:
 
         db.session.commit()
         return {"message": "Cleaner profile updated.", "profile": profile.to_dict()}
+
+    @staticmethod
+    def list_cleaners() -> Dict[str, List[Dict[str, Any]]]:
+        """Return a list of cleaners with basic information for end-users to browse."""
+        rows = (
+            db.session.query(User, UserProfile, CleanerProfile)
+            .join(UserProfile, UserProfile.user_id == User.id)
+            .join(CleanerProfile, CleanerProfile.user_id == User.id)
+            .filter(User.role == UserRole.cleaner)
+            .order_by(UserProfile.first_name.asc(), UserProfile.last_name.asc())
+            .all()
+        )
+
+        cleaners: List[Dict[str, Any]] = []
+        for user, profile, cleaner_profile in rows:
+            cleaners.append(
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "first_name": profile.first_name,
+                    "last_name": profile.last_name,
+                    "city": profile.city,
+                    "cleaner_profile": cleaner_profile.to_dict(),
+                }
+            )
+
+        return {"cleaners": cleaners}

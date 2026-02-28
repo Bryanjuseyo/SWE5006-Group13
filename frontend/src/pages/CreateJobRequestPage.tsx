@@ -6,6 +6,8 @@ import {
   type ServiceType,
 } from '../api/job_requests';
 import { getToken, getUser } from '../auth/storage';
+import { listCleaners } from "../api/cleaners";
+import type { CleanerListItem } from "../api/cleaners";
 
 export default function CreateJobRequestPage() {
   const navigate = useNavigate();
@@ -17,6 +19,8 @@ export default function CreateJobRequestPage() {
   const [preferredDate, setPreferredDate] = useState('');
   const [preferredTimeStart, setPreferredTimeStart] = useState('');
   const [preferredTimeEnd, setPreferredTimeEnd] = useState('');
+  const [cleaners, setCleaners] = useState<CleanerListItem[]>([]);
+  const [preferredCleanerId, setPreferredCleanerId] = useState<number | "">("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +37,22 @@ export default function CreateJobRequestPage() {
       return;
     }
   }, [token, user]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await listCleaners();
+        if (mounted) setCleaners(res.cleaners);
+      } catch (e) {
+        // optional: show toast/alert
+        console.error(e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const today = new Date().toISOString().split('T')[0];
   const now = new Date();
@@ -80,6 +100,7 @@ export default function CreateJobRequestPage() {
           preferred_date: preferredDate,
           preferred_time_start: preferredTimeStart || undefined,
           preferred_time_end: preferredTimeEnd || undefined,
+          cleaner_id: preferredCleanerId === "" ? null : preferredCleanerId,
         },
         token!
       );
@@ -200,7 +221,29 @@ export default function CreateJobRequestPage() {
               />
             </div>
           </div>
-
+          <div className="mb-3">
+            <label className="form-label">Preferred Cleaner (optional)</label>
+            <select
+              className="form-select"
+              value={preferredCleanerId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPreferredCleanerId(v === "" ? "" : Number(v));
+              }}
+            >
+              <option value="">No preference</option>
+              {cleaners.map((c) => (
+                <option key={c.user_id} value={c.user_id}>
+                  {c.first_name} {c.last_name} • {c.cleaner_profile.service_type} •{" "}
+                  {c.cleaner_profile.hourly_rate != null ? `$${c.cleaner_profile.hourly_rate}/hr` : "Rate N/A"} •{" "}
+                  {c.cleaner_profile.years_experience} yrs
+                </option>
+              ))}
+            </select>
+            <div className="form-text">
+              Pick a cleaner you trust. If not selected, we’ll treat it as “no preference”.
+            </div>
+          </div>
           <div className="d-flex gap-2">
             <button className="btn btn-primary" disabled={loading}>
               {loading ? 'Creating...' : 'Create Job Request'}

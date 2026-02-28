@@ -37,3 +37,10 @@ def update_profile():
         raw = str(e)
         error, message = raw.split("|", 1) if "|" in raw else ("bad_request", raw)
         return jsonify({"error": error, "message": message}), 400
+    
+@cleaner_bp.get("/list")
+@jwt_required
+@roles_required("end_user")
+def list_cleaners():
+    """Browse a list of cleaners (end-user)."""
+    return jsonify(CleanerProfileService.list_cleaners()), 200

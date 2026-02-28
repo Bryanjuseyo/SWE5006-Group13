@@ -47,6 +47,7 @@ export type CreateJobRequestPayload = {
   preferred_date: string;
   preferred_time_start?: string;
   preferred_time_end?: string;
+  cleaner_id?: number | null;
 };
 
 export type UpdateJobRequestPayload = Partial<CreateJobRequestPayload>;
