@@ -209,6 +209,7 @@ def test_create_success(mocker):
         "location": "123 Ang Mo Kio Street",
         "preferred_date": FUTURE_DATE,
         "status": "pending",
+        "cleaner_id": 1
     }
     mocker.patch("app.services.job_request_service.JobRequest", return_value=mock_job_request)
 

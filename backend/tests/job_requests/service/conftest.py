@@ -20,3 +20,20 @@ def _app_context(app):
     """Push an application context for every service test."""
     with app.app_context():
         yield
+
+@pytest.fixture
+def make_user(app):
+    from app.models import db, User, UserRole
+
+    def _make(email="u@test.com", role=UserRole.end_user, password_hash="x", **kwargs):
+        user = User(
+            email=email,
+            password_hash=password_hash,
+            role=role,
+            **kwargs,
+        )
+        db.session.add(user)
+        db.session.commit()
+        return user
+
+    return _make
