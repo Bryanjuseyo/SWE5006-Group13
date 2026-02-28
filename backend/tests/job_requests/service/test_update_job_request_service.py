@@ -160,3 +160,102 @@ def test_update_success(mocker):
     )
 
     assert result["message"] == "Job request updated successfully."
+
+def _create_job(db, JobRequest, JobStatus, owner_id, status):
+    job = JobRequest(
+        end_user_id=owner_id,
+        title="Test",
+        service_type="partial",
+        location="ABC",
+        preferred_date=date.today(),
+        status=status,
+    )
+    db.session.add(job)
+    db.session.commit()
+    return job
+
+
+def test_update_job_request_can_set_cleaner_when_pending(app, mocker, make_user):
+    from app.services.job_request_service import JobRequestService
+    from app.models import db, JobRequest, JobStatus, UserRole
+
+    owner = make_user(email="owner@test.com", role=UserRole.end_user)
+    cleaner = make_user(email="cleaner@test.com", role=UserRole.cleaner)
+
+    job = _create_job(db, JobRequest, JobStatus, owner.id, JobStatus.pending)
+
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._validate_cleaner_id",
+        return_value=cleaner.id
+    )
+
+    result = JobRequestService.update_job_request(
+        job_request_id=job.id,
+        user_id=owner.id,
+        role="end_user",
+        data={"cleaner_id": cleaner.id}
+    )
+
+    assert result["job_request"]["cleaner_id"] == cleaner.id
+
+
+def test_update_job_request_cannot_change_cleaner_if_completed(app, make_user):
+    from app.services.job_request_service import JobRequestService
+    from app.models import db, JobRequest, JobStatus, UserRole
+
+    owner = make_user(email="owner2@test.com", role=UserRole.end_user)
+    job = _create_job(db, JobRequest, JobStatus, owner.id, JobStatus.completed)
+
+    with pytest.raises(ValueError) as e:
+        JobRequestService.update_job_request(
+            job_request_id=job.id,
+            user_id=owner.id,
+            role="end_user",
+            data={"cleaner_id": 10}
+        )
+
+    # Your code blocks ALL updates when completed/cancelled (earlier check)
+    assert "invalid_status" in str(e.value)
+    assert "Cannot update a completed or cancelled job request" in str(e.value)
+
+
+def test_update_job_request_cannot_change_cleaner_if_cancelled(app, make_user):
+    from app.services.job_request_service import JobRequestService
+    from app.models import db, JobRequest, JobStatus, UserRole
+
+    owner = make_user(email="owner3@test.com", role=UserRole.end_user)
+    job = _create_job(db, JobRequest, JobStatus, owner.id, JobStatus.cancelled)
+
+    with pytest.raises(ValueError) as e:
+        JobRequestService.update_job_request(
+            job_request_id=job.id,
+            user_id=owner.id,
+            role="end_user",
+            data={"cleaner_id": 10}
+        )
+
+    assert "invalid_status" in str(e.value)
+    assert "Cannot update a completed or cancelled job request" in str(e.value)
+
+
+def test_update_job_request_invalid_cleaner_id(app, mocker, make_user):
+    from app.services.job_request_service import JobRequestService
+    from app.models import db, JobRequest, JobStatus, UserRole
+
+    owner = make_user(email="owner4@test.com", role=UserRole.end_user)
+    job = _create_job(db, JobRequest, JobStatus, owner.id, JobStatus.pending)
+
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._validate_cleaner_id",
+        side_effect=ValueError("invalid_cleaner|Cleaner not found.")
+    )
+
+    with pytest.raises(ValueError) as e:
+        JobRequestService.update_job_request(
+            job_request_id=job.id,
+            user_id=owner.id,
+            role="end_user",
+            data={"cleaner_id": 999}
+        )
+
+    assert "invalid_cleaner" in str(e.value)

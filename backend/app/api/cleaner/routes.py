@@ -6,6 +6,7 @@ cleaner_bp = Blueprint("cleaner", __name__)
 
 
 @cleaner_bp.before_request
+@jwt_required
 def _guard():
     if request.method == "OPTIONS":
         return "", 204
@@ -13,6 +14,7 @@ def _guard():
 
 
 @cleaner_bp.get("/dashboard")
+@roles_required("cleaner")
 def dashboard():
     return jsonify(message="Cleaner dashboard")
 

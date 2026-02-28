@@ -1,3 +1,6 @@
+import pytest
+from jwt import InvalidTokenError
+
 def test_cleaner_dashboard_returns_200(client, patch_decode_token, bearer_header):
     patch_decode_token(payload={"user_id": 7, "email": "c@test.com", "role": "cleaner"})
 
@@ -74,3 +77,40 @@ def test_cleaner_update_profile_missing_json_defaults_empty_dict(client, patch_d
     upsert.assert_called_once()
     assert upsert.call_args[0][0] == 7      # user_id
     assert upsert.call_args[0][1] == {}     # data
+
+
+def test_list_cleaners_missing_token_returns_401(client):
+    res = client.get("/api/cleaner/list")
+    assert res.status_code == 401
+    body = res.get_json()
+    assert body["error"] == "unauthorized"
+
+
+def test_list_cleaners_invalid_token_returns_401(client, patch_decode_token, bearer_header):
+    patch_decode_token(exc=InvalidTokenError())
+    res = client.get("/api/cleaner/list", headers=bearer_header("invalid"))
+    assert res.status_code == 401
+    body = res.get_json()
+    assert body["error"] == "unauthorized"
+
+
+@pytest.mark.parametrize("role", ["cleaner", "administrator"])
+def test_list_cleaners_wrong_role_returns_403(client, patch_decode_token, bearer_header, role):
+    patch_decode_token(payload={"user_id": 7, "email": "x@test.com", "role": role})
+    res = client.get("/api/cleaner/list", headers=bearer_header("ok"))
+    assert res.status_code == 403
+    body = res.get_json()
+    assert body["error"] == "forbidden"
+
+
+def test_end_user_can_list_cleaners_returns_200(client, patch_decode_token, bearer_header, mocker):
+    patch_decode_token(payload={"user_id": 9, "email": "u@test.com", "role": "end_user"})
+
+    mocker.patch(
+        "app.services.cleaner_profile_service.CleanerProfileService.list_cleaners",
+        return_value=[{"user_id": 1, "name": "Cleaner A"}],
+    )
+
+    res = client.get("/api/cleaner/list", headers=bearer_header("ok"))
+    assert res.status_code == 200
+    assert res.get_json() == [{"user_id": 1, "name": "Cleaner A"}]
