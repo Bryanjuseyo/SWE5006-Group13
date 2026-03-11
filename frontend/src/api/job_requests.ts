@@ -50,7 +50,10 @@ export type CreateJobRequestPayload = {
   cleaner_id?: number | null;
 };
 
-export type UpdateJobRequestPayload = Partial<CreateJobRequestPayload>;
+export type UpdateJobRequestPayload = Partial<Omit<CreateJobRequestPayload, 'preferred_time_start' | 'preferred_time_end'>> & {
+  preferred_time_start?: string | null;
+  preferred_time_end?: string | null;
+};
 
 export type JobRequestResponse = {
   message: string;
@@ -145,5 +148,19 @@ export async function updateJobStatus(
     body: { status },
     token,
   });
+}
+
+/**
+ * Get cleaner's upcoming schedule (confirmed / in_progress jobs)
+ */
+export async function getCleanerSchedule(token: string): Promise<{ schedule: JobRequest[] }> {
+  return apiRequest<{ schedule: JobRequest[] }>('/api/cleaner/schedule', { token });
+}
+
+/**
+ * Get open jobs available for the cleaner to accept
+ */
+export async function getAvailableJobs(token: string): Promise<JobRequestListResponse> {
+  return apiRequest<JobRequestListResponse>('/api/cleaner/available-jobs', { token });
 }
 

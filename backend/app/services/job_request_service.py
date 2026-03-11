@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, date, timezone
 
 from sqlalchemy import or_
-from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole
+from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile
 
 
 class JobRequestService:
@@ -273,11 +273,24 @@ class JobRequestService:
         if role == "end_user":
             query = JobRequest.query.filter_by(end_user_id=user_id)
         elif role == "cleaner":
-            # Cleaners see: jobs assigned to them OR unassigned pending jobs
+            # Filter open jobs by the cleaner's service_type
+            cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+            cleaner_service_type = cleaner_profile.service_type if cleaner_profile else None
+
+            if cleaner_service_type:
+                open_job_filter = (
+                    JobRequest.cleaner_id.is_(None) &
+                    (JobRequest.status == JobStatus.pending) &
+                    (JobRequest.service_type == cleaner_service_type)
+                )
+            else:
+                # No profile set — show no open jobs, only assigned ones
+                open_job_filter = (JobRequest.cleaner_id == user_id) & (False == True)
+
             query = JobRequest.query.filter(
                 or_(
                     JobRequest.cleaner_id == user_id,
-                    (JobRequest.cleaner_id.is_(None)) & (JobRequest.status == JobStatus.pending)
+                    open_job_filter,
                 )
             )
         else:
@@ -345,15 +358,13 @@ class JobRequestService:
 
         # Cleaner status transitions
         elif role == "cleaner":
-            is_unassigned_pending = (
-                job_request.cleaner_id is None and current_status == JobStatus.pending
-            )
+            is_open_pending = current_status == JobStatus.pending
 
-            if is_unassigned_pending:
-                # Cleaner is claiming an open job — only allowed transition is confirmed
+            if is_open_pending:
+                # Any cleaner can claim a pending job (preferred cleaner is a soft hint)
                 if new_status_enum != JobStatus.confirmed:
                     raise ValueError(
-                        "invalid_status|Can only confirm (accept) an unassigned pending job."
+                        "invalid_status|Can only confirm (accept) a pending job."
                     )
                 job_request.cleaner_id = user_id
             elif job_request.cleaner_id != user_id:
@@ -380,6 +391,95 @@ class JobRequestService:
             "job_request": job_request.to_dict()
         }
     
+    @staticmethod
+    def get_cleaner_schedule(user_id: int) -> Dict[str, Any]:
+        """
+        Return upcoming confirmed or in_progress jobs for a cleaner.
+        Ordered by date then start time.
+        """
+        today = date.today()
+        jobs = (
+            JobRequest.query
+            .filter(
+                JobRequest.cleaner_id == user_id,
+                JobRequest.status.in_([JobStatus.confirmed, JobStatus.in_progress]),
+                JobRequest.preferred_date >= today,
+                JobRequest.deleted_at.is_(None),
+            )
+            .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
+            .all()
+        )
+        return {"schedule": [j.to_dict() for j in jobs]}
+
+    @staticmethod
+    def get_available_jobs(user_id: int) -> Dict[str, Any]:
+        """
+        Return open (unassigned, pending) job requests that match the cleaner's
+        service_type and fall within their availability slots.
+        """
+        cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+        if not cleaner_profile:
+            return {"job_requests": []}
+
+        today = date.today()
+        jobs = (
+            JobRequest.query
+            .filter(
+                JobRequest.status == JobStatus.pending,
+                JobRequest.service_type == cleaner_profile.service_type,
+                JobRequest.preferred_date >= today,
+                JobRequest.deleted_at.is_(None),
+            )
+            .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
+            .all()
+        )
+
+        # If the cleaner has availability slots, only show jobs that fit within them.
+        # If no slots are set, all matching jobs are shown.
+        availability = cleaner_profile.availability
+        if availability:
+            jobs = [j for j in jobs if JobRequestService._job_fits_availability(j, availability)]
+
+        return {"job_requests": [j.to_dict() for j in jobs]}
+
+    @staticmethod
+    def _job_fits_availability(job, slots) -> bool:
+        """
+        Return True if the job's preferred date/time falls within at least one
+        availability slot.
+
+        Date: job.preferred_date must be within [slot.start_date, slot.end_date].
+        Time: only checked when the slot has a start_time set.
+          - If the job has no preferred_time_start, it fits any timed slot.
+          - Otherwise job.preferred_time_start must be >= slot.start_time, and
+            if both slot and job have an end time, job end <= slot end.
+        """
+        for slot in slots:
+            if not (slot.start_date <= job.preferred_date <= slot.end_date):
+                continue
+
+            # Date matches. Check time only if the slot has any time constraint.
+            if slot.start_time is None and slot.end_time is None:
+                return True  # slot covers the whole day
+
+            # Job has no time preference at all — fits any open slot
+            if job.preferred_time_start is None and job.preferred_time_end is None:
+                return True
+
+            # Check start time constraint (only if both slot and job have a start time)
+            if slot.start_time is not None and job.preferred_time_start is not None:
+                if job.preferred_time_start < slot.start_time:
+                    continue  # job starts before cleaner is available
+
+            # Check end time constraint (only if both slot and job have an end time)
+            if slot.end_time is not None and job.preferred_time_end is not None:
+                if job.preferred_time_end > slot.end_time:
+                    continue  # job ends after cleaner is done
+
+            return True
+
+        return False
+
     # Helper for cleaner validation
     @staticmethod
     def _validate_cleaner_id(cleaner_id: int | None) -> int | None:

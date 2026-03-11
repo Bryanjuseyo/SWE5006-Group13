@@ -203,7 +203,7 @@ class CleanerAvailability(db.Model):
 
     __table_args__ = (
         db.CheckConstraint('end_date >= start_date'),
-        db.CheckConstraint('end_time > start_time OR end_time IS NULL'),
+        db.CheckConstraint('end_time IS NULL OR (start_time IS NOT NULL AND end_time > start_time)'),
     )
 
     def to_dict(self):
