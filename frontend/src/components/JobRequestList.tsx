@@ -231,13 +231,21 @@ export default function JobRequestList() {
                       </button>
                     )}
 
-                    {isCleaner && job.status === 'confirmed' && (
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={() => handleStatusChange(job.id, 'in_progress')}
-                      >
-                        Start Job
-                      </button>
+                    {isCleaner && job.status === 'confirmed' && job.cleaner_id === user?.id && (
+                      <>
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => handleStatusChange(job.id, 'in_progress')}
+                        >
+                          Start Job
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => handleCancel(job.id)}
+                        >
+                          Cancel Job
+                        </button>
+                      </>
                     )}
 
                     {isCleaner && job.status === 'in_progress' && (

@@ -19,6 +19,9 @@ import ProfilePage from '../pages/ProfilePage';
 import CleanerProfilePage from '../pages/CleanerProfilePage';
 
 import ViewCleanersPage from '../pages/ViewCleanersPage';
+import CleanerAvailabilityPage from '../pages/CleanerAvailabilityPage';
+import CleanerSchedulePage from '../pages/CleanerSchedulePage';
+import BrowseJobsPage from '../pages/BrowseJobsPage';
 
 export default function App() {
   return (
@@ -105,6 +108,33 @@ export default function App() {
         element={
           <RequireRole role="cleaner">
             <CleanerProfilePage />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/cleaner/availability"
+        element={
+          <RequireRole role="cleaner">
+            <CleanerAvailabilityPage />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/cleaner/schedule"
+        element={
+          <RequireRole role="cleaner">
+            <CleanerSchedulePage />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/cleaner/browse-jobs"
+        element={
+          <RequireRole role="cleaner">
+            <BrowseJobsPage />
           </RequireRole>
         }
       />

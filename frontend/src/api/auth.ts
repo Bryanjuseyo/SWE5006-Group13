@@ -10,6 +10,7 @@ export type RegisterRequest = {
 
 export type RegisterResponse = {
   message: string;
+  token: string;
   user: { id: number; email: string; role: UserRole; created_at: string };
 };
 

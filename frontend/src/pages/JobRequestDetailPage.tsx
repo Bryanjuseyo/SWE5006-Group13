@@ -180,7 +180,9 @@ export default function JobRequestDetailPage() {
                 <p className="mb-0">{jobRequest.end_user?.email || 'Unknown'}</p>
               </div>
               <div className="col-md-6">
-                <h6 className="text-muted">Assigned Cleaner</h6>
+                <h6 className="text-muted">
+                  {jobRequest.status === 'pending' ? 'Preferred Cleaner' : 'Assigned Cleaner'}
+                </h6>
                 <p className="mb-0">{jobRequest.cleaner?.email || 'Not assigned'}</p>
               </div>
             </div>

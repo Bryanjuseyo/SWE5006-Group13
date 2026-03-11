@@ -56,7 +56,9 @@ class AuthService:
             # handles race condition where two register requests hit at same time
             raise ValueError("duplicate_email|Email is already registered.")
 
-        return {"message": "Registration successful.", "user": user.to_dict()}
+        token = generate_token(user.id, user.email, user.role.value)
+
+        return {"message": "Registration successful.", "token": token, "user": user.to_dict()}
 
     # =============================================
     # LOGIN USER

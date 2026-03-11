@@ -1,7 +1,8 @@
 from typing import Dict, Any, List
 from decimal import Decimal, InvalidOperation
+from datetime import datetime, time as time_type
 
-from app.models import db, CleanerProfile, ServiceType, User, UserProfile, UserRole
+from app.models import db, CleanerProfile, CleanerAvailability, ServiceType, User, UserProfile, UserRole
 
 
 class CleanerProfileService:
@@ -86,3 +87,189 @@ class CleanerProfileService:
             )
 
         return {"cleaners": cleaners}
+
+    @staticmethod
+    def get_availability(user_id: int) -> Dict[str, Any]:
+        profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+        if not profile:
+            return {"availability": []}
+        slots = (
+            CleanerAvailability.query
+            .filter_by(cleaner_profile_id=profile.id)
+            .order_by(CleanerAvailability.start_date.asc(), CleanerAvailability.start_time.asc())
+            .all()
+        )
+        return {"availability": [a.to_dict() for a in slots]}
+
+    @staticmethod
+    def add_availability(user_id: int, data: dict) -> Dict[str, Any]:
+        profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+        if not profile:
+            raise ValueError("not_found|Cleaner profile not found. Please set up your profile first.")
+
+        start_date_str = data.get("start_date")
+        end_date_str = data.get("end_date")
+        start_time_str = data.get("start_time") or None
+        end_time_str = data.get("end_time") or None
+
+        if not start_date_str:
+            raise ValueError("invalid_request|start_date is required.")
+        if not end_date_str:
+            raise ValueError("invalid_request|end_date is required.")
+
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            raise ValueError("invalid_date|start_date must be in YYYY-MM-DD format.")
+
+        try:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            raise ValueError("invalid_date|end_date must be in YYYY-MM-DD format.")
+
+        if end_date < start_date:
+            raise ValueError("invalid_date|end_date must be on or after start_date.")
+
+        start_time = None
+        end_time = None
+
+        if start_time_str:
+            try:
+                start_time = datetime.strptime(start_time_str, "%H:%M").time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|start_time must be in HH:MM format.")
+
+        if end_time_str:
+            try:
+                end_time = datetime.strptime(end_time_str, "%H:%M").time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|end_time must be in HH:MM format.")
+
+        if end_time and not start_time:
+            raise ValueError("invalid_time|start_time is required when end_time is set.")
+        if start_time and end_time and end_time <= start_time:
+            raise ValueError("invalid_time|end_time must be after start_time.")
+
+        # Check for overlap with existing slots
+        for existing in profile.availability:
+            if CleanerProfileService._slots_overlap(existing, start_date, end_date, start_time, end_time):
+                raise ValueError(
+                    "invalid_request|This slot overlaps with an existing availability slot."
+                )
+
+        slot = CleanerAvailability(
+            cleaner_profile_id=profile.id,
+            start_date=start_date,
+            end_date=end_date,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        db.session.add(slot)
+        db.session.commit()
+        return {"message": "Availability slot added.", "availability": slot.to_dict()}
+
+    @staticmethod
+    def _slots_overlap(existing, new_start_date, new_end_date, new_start_time, new_end_time) -> bool:
+        """Return True if the new slot's date/time range overlaps with an existing slot."""
+        # No date overlap — no conflict
+        if new_start_date > existing.end_date or existing.start_date > new_end_date:
+            return False
+
+        # Dates overlap. If either slot has no time restriction it covers the whole day.
+        if existing.start_time is None or new_start_time is None:
+            return True
+
+        # Both have times — check time range overlap.
+        # Treat a missing end_time as end of day.
+        _END_OF_DAY = time_type(23, 59, 59)
+        existing_end = existing.end_time or _END_OF_DAY
+        new_end = new_end_time or _END_OF_DAY
+
+        return new_start_time < existing_end and existing.start_time < new_end
+
+    @staticmethod
+    def update_availability(user_id: int, availability_id: int, data: dict) -> Dict[str, Any]:
+        profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+        if not profile:
+            raise ValueError("not_found|Cleaner profile not found.")
+
+        slot = CleanerAvailability.query.filter_by(
+            id=availability_id, cleaner_profile_id=profile.id
+        ).first()
+        if not slot:
+            raise ValueError("not_found|Availability slot not found.")
+
+        start_date_str = data.get("start_date")
+        end_date_str = data.get("end_date")
+        start_time_str = data.get("start_time") or None
+        end_time_str = data.get("end_time") or None
+
+        if not start_date_str:
+            raise ValueError("invalid_request|start_date is required.")
+        if not end_date_str:
+            raise ValueError("invalid_request|end_date is required.")
+
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            raise ValueError("invalid_date|start_date must be in YYYY-MM-DD format.")
+
+        try:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            raise ValueError("invalid_date|end_date must be in YYYY-MM-DD format.")
+
+        if end_date < start_date:
+            raise ValueError("invalid_date|end_date must be on or after start_date.")
+
+        start_time = None
+        end_time = None
+
+        if start_time_str:
+            try:
+                start_time = datetime.strptime(start_time_str, "%H:%M").time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|start_time must be in HH:MM format.")
+
+        if end_time_str:
+            try:
+                end_time = datetime.strptime(end_time_str, "%H:%M").time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|end_time must be in HH:MM format.")
+
+        if end_time and not start_time:
+            raise ValueError("invalid_time|start_time is required when end_time is set.")
+        if start_time and end_time and end_time <= start_time:
+            raise ValueError("invalid_time|end_time must be after start_time.")
+
+        # Check for overlap with other slots (exclude the one being edited)
+        for existing in profile.availability:
+            if existing.id == availability_id:
+                continue
+            if CleanerProfileService._slots_overlap(existing, start_date, end_date, start_time, end_time):
+                raise ValueError(
+                    "invalid_request|This slot overlaps with an existing availability slot."
+                )
+
+        slot.start_date = start_date
+        slot.end_date = end_date
+        slot.start_time = start_time
+        slot.end_time = end_time
+        db.session.commit()
+        return {"message": "Availability slot updated.", "availability": slot.to_dict()}
+
+    @staticmethod
+    def delete_availability(user_id: int, availability_id: int) -> Dict[str, Any]:
+        profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+        if not profile:
+            raise ValueError("not_found|Cleaner profile not found.")
+
+        slot = CleanerAvailability.query.filter_by(
+            id=availability_id, cleaner_profile_id=profile.id
+        ).first()
+        if not slot:
+            raise ValueError("not_found|Availability slot not found.")
+
+        db.session.delete(slot)
+        db.session.commit()
+        return {"message": "Availability slot removed."}

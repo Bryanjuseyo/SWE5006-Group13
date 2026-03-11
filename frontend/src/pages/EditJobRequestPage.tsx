@@ -73,8 +73,8 @@ export default function EditJobRequestPage() {
       setServiceType(job.service_type || '');
       setLocation(job.location || '');
       setPreferredDate(job.preferred_date || '');
-      setPreferredTimeStart(job.preferred_time_start || '');
-      setPreferredTimeEnd(job.preferred_time_end || '');
+      setPreferredTimeStart(job.preferred_time_start ? job.preferred_time_start.slice(0, 5) : '');
+      setPreferredTimeEnd(job.preferred_time_end ? job.preferred_time_end.slice(0, 5) : '');
       setPreferredCleanerId(job.cleaner_id ?? "");
     } catch (err: any) {
       setError(err?.message || 'Failed to load job request.');
@@ -132,8 +132,8 @@ export default function EditJobRequestPage() {
           service_type: serviceType,
           location: location.trim(),
           preferred_date: preferredDate,
-          preferred_time_start: preferredTimeStart || undefined,
-          preferred_time_end: preferredTimeEnd || undefined,
+          preferred_time_start: preferredTimeStart || null,
+          preferred_time_end: preferredTimeEnd || null,
           cleaner_id: preferredCleanerId === "" ? null : preferredCleanerId,
         },
         token!
