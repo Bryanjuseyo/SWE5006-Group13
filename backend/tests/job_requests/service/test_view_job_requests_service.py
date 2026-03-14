@@ -182,3 +182,82 @@ def test_get_available_jobs_no_cleaner_profile_returns_empty(mocker):
 
     assert result == {"job_requests": []}
     mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+
+def test_get_available_jobs_returns_jobs_within_availability(mocker):
+    """Available jobs should include jobs that fit within cleaner availability slots."""
+    mock_profile = mocker.Mock()
+    mock_profile.service_type = ServiceType.full
+
+    slot = mocker.Mock()
+    slot.start_date = __import__("datetime").date(2026, 3, 20)
+    slot.end_date = __import__("datetime").date(2026, 3, 20)
+    slot.start_time = __import__("datetime").time(9, 0)
+    slot.end_time = __import__("datetime").time(12, 0)
+    mock_profile.availability = [slot]
+
+    mock_cleaner_profile_query = mocker.Mock()
+    mock_cleaner_profile_query.filter_by.return_value.first.return_value = mock_profile
+    mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
+
+    matching_job = mocker.Mock()
+    matching_job.preferred_date = __import__("datetime").date(2026, 3, 20)
+    matching_job.preferred_time_start = __import__("datetime").time(10, 0)
+    matching_job.preferred_time_end = __import__("datetime").time(11, 0)
+    matching_job.to_dict.return_value = {
+        "id": 31,
+        "service_type": "full",
+        "status": "pending",
+        "preferred_date": "2026-03-20",
+        "preferred_time_start": "10:00",
+        "preferred_time_end": "11:00",
+    }
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [matching_job]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_available_jobs(user_id=5)
+
+    assert len(result["job_requests"]) == 1
+    assert result["job_requests"][0]["id"] == 31
+    assert result["job_requests"][0]["preferred_time_start"] == "10:00"
+    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+
+
+def test_get_available_jobs_excludes_jobs_outside_availability(mocker):
+    """Available jobs should exclude jobs outside cleaner availability slots."""
+    mock_profile = mocker.Mock()
+    mock_profile.service_type = ServiceType.full
+
+    slot = mocker.Mock()
+    slot.start_date = __import__("datetime").date(2026, 3, 20)
+    slot.end_date = __import__("datetime").date(2026, 3, 20)
+    slot.start_time = __import__("datetime").time(9, 0)
+    slot.end_time = __import__("datetime").time(12, 0)
+    mock_profile.availability = [slot]
+
+    mock_cleaner_profile_query = mocker.Mock()
+    mock_cleaner_profile_query.filter_by.return_value.first.return_value = mock_profile
+    mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
+
+    outside_job = mocker.Mock()
+    outside_job.preferred_date = __import__("datetime").date(2026, 3, 20)
+    outside_job.preferred_time_start = __import__("datetime").time(13, 0)
+    outside_job.preferred_time_end = __import__("datetime").time(14, 0)
+    outside_job.to_dict.return_value = {
+        "id": 32,
+        "service_type": "full",
+        "status": "pending",
+        "preferred_date": "2026-03-20",
+        "preferred_time_start": "13:00",
+        "preferred_time_end": "14:00",
+    }
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [outside_job]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_available_jobs(user_id=5)
+
+    assert result["job_requests"] == []
+    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
