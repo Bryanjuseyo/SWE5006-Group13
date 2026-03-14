@@ -190,7 +190,7 @@ class JobRequestService:
         end_time = updates.get("preferred_time_end", job_request.preferred_time_end)
         if start_time and end_time and end_time <= start_time:
             raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
-        
+
         # Validate cleaner
         if "cleaner_id" in updates:
             if job_request.status != JobStatus.pending:
@@ -390,7 +390,7 @@ class JobRequestService:
             "message": f"Job request status updated to {new_status}.",
             "job_request": job_request.to_dict()
         }
-    
+
     @staticmethod
     def get_cleaner_schedule(user_id: int) -> Dict[str, Any]:
         """

@@ -121,6 +121,7 @@ def test_cleaner_claim_unassigned_job_success(mocker):
     assert mock_job_request.cleaner_id == 5
     assert mock_job_request.status == JobStatus.confirmed
 
+
 def test_cleaner_cannot_accept_job_already_assigned_to_another_cleaner(mocker):
     """Cleaner cannot accept a job that is already assigned to another cleaner."""
     mock_job_request = mocker.Mock()
@@ -179,6 +180,7 @@ def test_cleaner_start_job_success(mocker):
 
     assert "in_progress" in result["message"]
     assert mock_job_request.status == JobStatus.in_progress
+
 
 def test_cleaner_cancel_confirmed_job_success(mocker):
     """Cleaner can cancel a confirmed job that has not started yet."""
