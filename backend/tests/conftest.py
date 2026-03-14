@@ -1,4 +1,4 @@
-from tests.auth.test_routes import register_auth_test_routes
+from auth.test_routes import register_auth_test_routes
 import os
 import sys
 
