@@ -1,4 +1,4 @@
-from datetime import datetime,  timezone
+from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import UserMixin
@@ -42,8 +42,12 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.Enum(UserRole), default=UserRole.end_user, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True),  default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
     failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
     locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
     last_login_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -82,7 +86,11 @@ class UserProfile(db.Model):
     address = db.Column(db.Text)
     city = db.Column(db.String(100))
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
 
     def to_dict(self):
         return {
@@ -128,7 +136,11 @@ class CleanerProfile(db.Model):
     hourly_rate = db.Column(db.Numeric(10, 2))
     years_experience = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
 
     # Relationships
     offered_services = db.relationship('CleanerOfferedService', backref='cleaner_profile', cascade='all, delete-orphan')
@@ -252,7 +264,11 @@ class JobRequest(db.Model):
 
     # Timestamps
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
     deleted_at = db.Column(db.DateTime(timezone=True), nullable=True, default=None)
 
     # Relationships

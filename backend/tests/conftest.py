@@ -1,3 +1,4 @@
+from auth.test_routes import register_auth_test_routes
 import os
 import sys
 
@@ -21,7 +22,7 @@ atexit.register(_container.stop)
 
 from app.models import db as _db  # noqa: E402
 from app import create_app  # noqa: E402
-from tests.auth.test_routes import register_auth_test_routes
+
 
 @pytest.fixture(scope="session")
 def app():
@@ -73,9 +74,14 @@ def patch_decode_token(mocker):
       patch_decode_token(exc=ExpiredSignatureError())
     """
     def _patch(payload=None, exc=None):
-        target = "app.api.auth.decorators.decode_token"
-        if exc is not None:
-            mocker.patch(target, side_effect=exc)
-        else:
-            mocker.patch(target, return_value=payload or {})
+        targets = [
+            "app.api.auth.decorators.decode_token",
+            "app.api.cleaner.routes.decode_token",
+        ]
+
+        for target in targets:
+            if exc is not None:
+                mocker.patch(target, side_effect=exc)
+            else:
+                mocker.patch(target, return_value=payload or {})
     return _patch
