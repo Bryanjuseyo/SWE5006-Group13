@@ -64,7 +64,7 @@ jobs:
 
       - name: Lint
         env:
-        PYTHONPATH: .
+          PYTHONPATH: .
         run: |
           pip install flake8
           flake8 . --max-line-length=120
