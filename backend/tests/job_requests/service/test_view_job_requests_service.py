@@ -183,6 +183,7 @@ def test_get_available_jobs_no_cleaner_profile_returns_empty(mocker):
     assert result == {"job_requests": []}
     mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
 
+
 def test_get_available_jobs_returns_jobs_within_availability(mocker):
     """Available jobs should include jobs that fit within cleaner availability slots."""
     mock_profile = mocker.Mock()
@@ -261,6 +262,7 @@ def test_get_available_jobs_excludes_jobs_outside_availability(mocker):
 
     assert result["job_requests"] == []
     mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+
 
 def test_get_cleaner_schedule_returns_upcoming_confirmed_and_in_progress_jobs(mocker):
     """Cleaner schedule should return upcoming confirmed and in-progress jobs."""

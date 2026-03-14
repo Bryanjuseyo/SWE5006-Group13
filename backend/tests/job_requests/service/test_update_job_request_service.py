@@ -161,6 +161,7 @@ def test_update_success(mocker):
 
     assert result["message"] == "Job request updated successfully."
 
+
 def _create_job(db, JobRequest, JobStatus, owner_id, status):
     job = JobRequest(
         end_user_id=owner_id,

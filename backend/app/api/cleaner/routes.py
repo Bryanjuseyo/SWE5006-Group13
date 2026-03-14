@@ -126,6 +126,7 @@ def delete_availability(availability_id):
     except ValueError as e:
         return _handle_error(e)
 
+
 @cleaner_bp.get("/schedule")
 @jwt_required
 @roles_required("cleaner")

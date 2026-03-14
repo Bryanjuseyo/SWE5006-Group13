@@ -1,6 +1,7 @@
 import pytest
 from jwt import InvalidTokenError
 
+
 def test_cleaner_dashboard_returns_200(client, patch_decode_token, bearer_header):
     patch_decode_token(payload={"user_id": 7, "email": "c@test.com", "role": "cleaner"})
 

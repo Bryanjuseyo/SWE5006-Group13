@@ -74,6 +74,7 @@ def test_missing_service_type_on_create_raises_value_error(mocker):
 
     assert "invalid_profile" in str(e.value)
 
+
 def test_add_availability_success(mocker):
     mock_profile = mocker.Mock()
     mock_profile.id = 10

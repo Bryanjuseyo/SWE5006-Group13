@@ -21,6 +21,7 @@ def _app_context(app):
     with app.app_context():
         yield
 
+
 @pytest.fixture
 def make_user(app):
     from app.models import db, User, UserRole
