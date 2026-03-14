@@ -3,7 +3,7 @@ View job requests — service layer tests.
 """
 import pytest
 from app.services.job_request_service import JobRequestService
-from app.models import JobStatus
+from app.models import JobStatus, ServiceType
 
 
 def test_view_not_found_raises_error(mocker):
@@ -79,3 +79,106 @@ def test_get_success(mocker):
     result = JobRequestService.get_job_request(job_request_id=1, user_id=1, role="end_user")
 
     assert result["job_request"]["id"] == 1
+
+
+# get_job_requests tests
+def test_cleaner_get_job_requests_only_matching_service_type(mocker):
+    """Cleaner should only receive open pending jobs matching their service type."""
+    # cleaner profile = partial
+    mock_profile = mocker.Mock()
+    mock_profile.service_type = ServiceType.partial
+
+    mock_cleaner_profile_query = mocker.Mock()
+    mock_cleaner_profile_query.filter_by.return_value.first.return_value = mock_profile
+    mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
+
+    # returned jobs should only be the matching ones
+    mock_job_1 = mocker.Mock()
+    mock_job_1.to_dict.return_value = {"id": 1, "service_type": "partial"}
+
+    mock_job_2 = mocker.Mock()
+    mock_job_2.to_dict.return_value = {"id": 2, "service_type": "partial"}
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_job_1, mock_job_2
+    ]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_job_requests(user_id=5, role="cleaner")
+
+    assert len(result["job_requests"]) == 2
+    assert result["job_requests"][0]["service_type"] == "partial"
+    assert result["job_requests"][1]["service_type"] == "partial"
+    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+
+
+def test_cleaner_get_job_requests_no_profile_only_assigned_jobs(mocker):
+    """Cleaner with no profile should only receive assigned jobs, not open jobs."""
+    # no cleaner profile
+    mock_cleaner_profile_query = mocker.Mock()
+    mock_cleaner_profile_query.filter_by.return_value.first.return_value = None
+    mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
+
+    # only assigned job returned from query
+    mock_assigned_job = mocker.Mock()
+    mock_assigned_job.to_dict.return_value = {
+        "id": 10,
+        "cleaner_id": 5,
+        "status": "confirmed"
+    }
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_assigned_job
+    ]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_job_requests(user_id=5, role="cleaner")
+
+    assert len(result["job_requests"]) == 1
+    assert result["job_requests"][0]["cleaner_id"] == 5
+    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+
+
+# get_available_jobs tests
+def test_get_available_jobs_only_matching_service_type(mocker):
+    """Available jobs should only include pending jobs matching cleaner service type."""
+    mock_profile = mocker.Mock()
+    mock_profile.service_type = ServiceType.full
+    mock_profile.availability = []
+
+    mock_cleaner_profile_query = mocker.Mock()
+    mock_cleaner_profile_query.filter_by.return_value.first.return_value = mock_profile
+    mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
+
+    mock_job_1 = mocker.Mock()
+    mock_job_1.to_dict.return_value = {"id": 21, "service_type": "full", "status": "pending"}
+
+    mock_job_2 = mocker.Mock()
+    mock_job_2.to_dict.return_value = {"id": 22, "service_type": "full", "status": "pending"}
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [
+        mock_job_1, mock_job_2
+    ]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_available_jobs(user_id=5)
+
+    assert len(result["job_requests"]) == 2
+    assert result["job_requests"][0]["service_type"] == "full"
+    assert result["job_requests"][1]["service_type"] == "full"
+    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+
+
+def test_get_available_jobs_no_cleaner_profile_returns_empty(mocker):
+    """If cleaner has no profile, available jobs should be empty."""
+    mock_cleaner_profile_query = mocker.Mock()
+    mock_cleaner_profile_query.filter_by.return_value.first.return_value = None
+    mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
+
+    result = JobRequestService.get_available_jobs(user_id=5)
+
+    assert result == {"job_requests": []}
+    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
