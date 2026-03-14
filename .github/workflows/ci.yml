@@ -63,6 +63,8 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Lint
+        env:
+        PYTHONPATH: .
         run: |
           pip install flake8
           flake8 . --max-line-length=120
@@ -71,4 +73,5 @@ jobs:
         env:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
           FLASK_ENV: testing
+          PYTHONPATH: .
         run: pytest
