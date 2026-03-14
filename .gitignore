@@ -11,3 +11,5 @@ backend/.venv/
 __pycache__/
 *.pyc
 *.pyo
+frontend/.env.staging
+.env.staging
