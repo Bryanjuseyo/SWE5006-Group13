@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional
 from datetime import datetime, date, timezone
 
-from sqlalchemy import or_
+from sqlalchemy import or_, false
 from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile
 
 
@@ -285,7 +285,7 @@ class JobRequestService:
                 )
             else:
                 # No profile set — show no open jobs, only assigned ones
-                open_job_filter = (JobRequest.cleaner_id == user_id) & (False == True)
+                open_job_filter = false()
 
             query = JobRequest.query.filter(
                 or_(
