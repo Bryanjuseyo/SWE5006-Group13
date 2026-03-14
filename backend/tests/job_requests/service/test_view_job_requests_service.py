@@ -261,3 +261,107 @@ def test_get_available_jobs_excludes_jobs_outside_availability(mocker):
 
     assert result["job_requests"] == []
     mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+
+def test_get_cleaner_schedule_returns_upcoming_confirmed_and_in_progress_jobs(mocker):
+    """Cleaner schedule should return upcoming confirmed and in-progress jobs."""
+    job_1 = mocker.Mock()
+    job_1.to_dict.return_value = {
+        "id": 41,
+        "cleaner_id": 5,
+        "status": "confirmed",
+        "preferred_date": "2026-03-20",
+        "preferred_time_start": "09:00",
+    }
+
+    job_2 = mocker.Mock()
+    job_2.to_dict.return_value = {
+        "id": 42,
+        "cleaner_id": 5,
+        "status": "in_progress",
+        "preferred_date": "2026-03-21",
+        "preferred_time_start": "10:00",
+    }
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [job_1, job_2]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_cleaner_schedule(user_id=5)
+
+    assert len(result["schedule"]) == 2
+    assert result["schedule"][0]["status"] == "confirmed"
+    assert result["schedule"][1]["status"] == "in_progress"
+
+
+def test_get_cleaner_schedule_excludes_past_jobs(mocker):
+    """Cleaner schedule should exclude past jobs and only return upcoming ones."""
+    upcoming_job = mocker.Mock()
+    upcoming_job.to_dict.return_value = {
+        "id": 43,
+        "cleaner_id": 5,
+        "status": "confirmed",
+        "preferred_date": "2026-03-20",
+        "preferred_time_start": "11:00",
+    }
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [upcoming_job]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_cleaner_schedule(user_id=5)
+
+    assert len(result["schedule"]) == 1
+    assert result["schedule"][0]["id"] == 43
+
+
+def test_get_cleaner_schedule_returns_empty_when_no_jobs(mocker):
+    """Cleaner schedule should be empty when there are no upcoming jobs."""
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.order_by.return_value.all.return_value = []
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_cleaner_schedule(user_id=5)
+
+    assert result == {"schedule": []}
+
+
+def test_get_cleaner_schedule_orders_by_date_then_start_time(mocker):
+    """Cleaner schedule should preserve ordering by preferred date then start time."""
+    earlier_time_job = mocker.Mock()
+    earlier_time_job.to_dict.return_value = {
+        "id": 44,
+        "cleaner_id": 5,
+        "status": "confirmed",
+        "preferred_date": "2026-03-20",
+        "preferred_time_start": "09:00",
+    }
+
+    later_time_job = mocker.Mock()
+    later_time_job.to_dict.return_value = {
+        "id": 45,
+        "cleaner_id": 5,
+        "status": "confirmed",
+        "preferred_date": "2026-03-20",
+        "preferred_time_start": "14:00",
+    }
+
+    next_day_job = mocker.Mock()
+    next_day_job.to_dict.return_value = {
+        "id": 46,
+        "cleaner_id": 5,
+        "status": "in_progress",
+        "preferred_date": "2026-03-21",
+        "preferred_time_start": "08:00",
+    }
+
+    mock_job_query = mocker.Mock()
+    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [
+        earlier_time_job,
+        later_time_job,
+        next_day_job,
+    ]
+    mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+
+    result = JobRequestService.get_cleaner_schedule(user_id=5)
+
+    assert [job["id"] for job in result["schedule"]] == [44, 45, 46]
