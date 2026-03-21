@@ -1,5 +1,5 @@
 """
-View job requests — service layer tests.
+View job requests - service layer tests.
 """
 import pytest
 from app.services.job_request_service import JobRequestService

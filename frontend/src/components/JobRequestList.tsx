@@ -15,6 +15,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  rejected: 'Rejected',
 };
 
 const STATUS_COLORS: Record<JobStatus, string> = {
@@ -23,6 +24,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   in_progress: 'primary',
   completed: 'success',
   cancelled: 'secondary',
+  rejected: 'danger',
 };
 
 export default function JobRequestList() {
@@ -108,6 +110,7 @@ export default function JobRequestList() {
           <option value="in_progress">In Progress</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
+          <option value="rejected">Rejected</option>
         </select>
       </div>
 
@@ -184,8 +187,25 @@ export default function JobRequestList() {
 
                   {job.cleaner && (
                     <div className="mt-2">
-                      <small className="text-muted">Cleaner:</small>{' '}
+                      <small className="text-muted">
+                        {job.status === 'pending' ? 'Preferred Cleaner:' : 'Assigned Cleaner:'}
+                      </small>{' '}
                       <span>{job.cleaner.email}</span>
+                      {job.status === 'pending' && job.is_in_priority_window && (
+                        <span className="badge bg-info ms-2">
+                          Priority window - awaiting response
+                        </span>
+                      )}
+                      {job.status === 'pending' && !job.is_in_priority_window && job.priority_window_end && (
+                        <span className="badge bg-warning text-dark ms-2">
+                          Open to all cleaners
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {job.status === 'pending' && !job.cleaner_id && (
+                    <div className="mt-2">
+                      <span className="badge bg-secondary">Open to all cleaners</span>
                     </div>
                   )}
 

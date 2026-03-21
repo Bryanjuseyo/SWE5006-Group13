@@ -10,20 +10,22 @@ import {
 } from '../api/job_requests';
 import { getToken, getUser } from '../auth/storage';
 
-const STATUS_LABELS: Record<JobStatus, string> = {
+const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  rejected: 'Rejected',
 };
 
-const STATUS_COLORS: Record<JobStatus, string> = {
+const STATUS_COLORS: Record<string, string> = {
   pending: 'warning',
   confirmed: 'info',
   in_progress: 'primary',
   completed: 'success',
   cancelled: 'secondary',
+  rejected: 'danger',
 };
 
 export default function JobRequestDetailPage() {
@@ -63,7 +65,7 @@ export default function JobRequestDetailPage() {
 
     try {
       await deleteJobRequest(Number(id), token!);
-      navigate('/job-requests', { replace: true });
+      navigate(backTo, { replace: true });
     } catch (err: any) {
       alert(err?.message || 'Failed to delete job request.');
     }
@@ -87,6 +89,9 @@ export default function JobRequestDetailPage() {
 
   const isEndUser = user?.role === 'end_user';
   const isCleaner = user?.role === 'cleaner';
+  const isAdmin = user?.role === 'administrator';
+  const backTo = isAdmin ? '/admin/bookings' : '/job-requests';
+  const backLabel = isAdmin ? 'Back to Manage Bookings' : 'Back to List';
 
   if (loading) {
     return (
@@ -107,8 +112,8 @@ export default function JobRequestDetailPage() {
         <Navbar />
         <main className="container py-5">
           <div className="alert alert-danger">{error || 'Job request not found.'}</div>
-          <Link to="/job-requests" className="btn btn-primary">
-            Back to Job Requests
+          <Link to={backTo} className="btn btn-primary">
+            {backLabel}
           </Link>
         </main>
       </>
@@ -122,7 +127,7 @@ export default function JobRequestDetailPage() {
         <nav aria-label="breadcrumb" className="mb-3">
           <ol className="breadcrumb">
             <li className="breadcrumb-item">
-              <Link to="/job-requests">Job Requests</Link>
+              <Link to={backTo}>{isAdmin ? 'Manage Bookings' : 'Job Requests'}</Link>
             </li>
             <li className="breadcrumb-item active">#{jobRequest.id}</li>
           </ol>
@@ -131,8 +136,8 @@ export default function JobRequestDetailPage() {
         <div className="card shadow-sm">
           <div className="card-header d-flex justify-content-between align-items-center">
             <h1 className="h4 mb-0">{jobRequest.title}</h1>
-            <span className={`badge bg-${STATUS_COLORS[jobRequest.status]} fs-6`}>
-              {STATUS_LABELS[jobRequest.status]}
+            <span className={`badge bg-${STATUS_COLORS[jobRequest.status] || 'secondary'} fs-6`}>
+              {STATUS_LABELS[jobRequest.status] || jobRequest.status}
             </span>
           </div>
 
@@ -183,7 +188,27 @@ export default function JobRequestDetailPage() {
                 <h6 className="text-muted">
                   {jobRequest.status === 'pending' ? 'Preferred Cleaner' : 'Assigned Cleaner'}
                 </h6>
-                <p className="mb-0">{jobRequest.cleaner?.email || 'Not assigned'}</p>
+                <p className="mb-0">
+                  {jobRequest.cleaner?.email || 'Not assigned'}
+                </p>
+                {jobRequest.status === 'pending' && jobRequest.is_in_priority_window && (
+                  <div className="mt-1">
+                    <span className="badge bg-info">Priority window active</span>
+                    <small className="text-muted ms-2">
+                      Expires {new Date(jobRequest.priority_window_end!).toLocaleTimeString()}
+                    </small>
+                  </div>
+                )}
+                {jobRequest.status === 'pending' && jobRequest.cleaner_id && !jobRequest.is_in_priority_window && jobRequest.priority_window_end && (
+                  <div className="mt-1">
+                    <span className="badge bg-warning text-dark">Priority window expired - Open to all cleaners</span>
+                  </div>
+                )}
+                {jobRequest.status === 'pending' && !jobRequest.cleaner_id && (
+                  <div className="mt-1">
+                    <span className="badge bg-secondary">Open to all cleaners</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -191,8 +216,8 @@ export default function JobRequestDetailPage() {
 
           <div className="card-footer">
             <div className="d-flex gap-2 flex-wrap">
-              <Link to="/job-requests" className="btn btn-secondary">
-                Back to List
+              <Link to={backTo} className="btn btn-secondary">
+                {backLabel}
               </Link>
 
               {isEndUser && jobRequest.status === 'pending' && (

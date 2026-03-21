@@ -22,6 +22,8 @@ import ViewCleanersPage from '../pages/ViewCleanersPage';
 import CleanerAvailabilityPage from '../pages/CleanerAvailabilityPage';
 import CleanerSchedulePage from '../pages/CleanerSchedulePage';
 import BrowseJobsPage from '../pages/BrowseJobsPage';
+import AdminUsersPage from '../pages/AdminUsersPage';
+import AdminBookingsPage from '../pages/AdminBookingsPage';
 
 export default function App() {
   return (
@@ -86,6 +88,24 @@ export default function App() {
         element={
           <RequireRole role="administrator">
             <AdminDashboard />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/admin/users"
+        element={
+          <RequireRole role="administrator">
+            <AdminUsersPage />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/admin/bookings"
+        element={
+          <RequireRole role="administrator">
+            <AdminBookingsPage />
           </RequireRole>
         }
       />
