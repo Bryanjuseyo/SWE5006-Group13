@@ -8,6 +8,7 @@ import {
 import { getToken, getUser } from '../auth/storage';
 import { listCleaners } from "../api/cleaners";
 import type { CleanerListItem } from "../api/cleaners";
+import { autoAssignCleaner } from '../api/admin';
 
 export default function CreateJobRequestPage() {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ export default function CreateJobRequestPage() {
   const [preferredTimeEnd, setPreferredTimeEnd] = useState('');
   const [cleaners, setCleaners] = useState<CleanerListItem[]>([]);
   const [preferredCleanerId, setPreferredCleanerId] = useState<number | "">("");
+  const [cleanerMode, setCleanerMode] = useState<'auto' | 'manual'>('auto');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,7 +93,7 @@ export default function CreateJobRequestPage() {
 
     try {
       setLoading(true);
-      await createJobRequest(
+      const res = await createJobRequest(
         {
           title: title.trim(),
           description: description.trim() || undefined,
@@ -100,10 +102,19 @@ export default function CreateJobRequestPage() {
           preferred_date: preferredDate,
           preferred_time_start: preferredTimeStart || undefined,
           preferred_time_end: preferredTimeEnd || undefined,
-          cleaner_id: preferredCleanerId === "" ? null : preferredCleanerId,
+          cleaner_id: cleanerMode === 'manual' && preferredCleanerId !== "" ? preferredCleanerId : null,
         },
         token!
       );
+
+      if (cleanerMode === 'auto') {
+        try {
+          await autoAssignCleaner(res.job_request.id, token!);
+        } catch {
+          // Auto-match is best-effort; job is still created
+        }
+      }
+
       navigate('/job-requests', { replace: true });
     } catch (err: any) {
       setError(err?.message || 'Failed to create job request.');
@@ -222,31 +233,56 @@ export default function CreateJobRequestPage() {
             </div>
           </div>
           <div className="mb-3">
-            <label className="form-label">Preferred Cleaner (optional)</label>
-            <select
-              className="form-select"
-              value={preferredCleanerId}
-              onChange={(e) => {
-                const v = e.target.value;
-                setPreferredCleanerId(v === "" ? "" : Number(v));
-              }}
-            >
-              <option value="">No preference</option>
-              {cleaners.map((c) => (
-                <option key={c.user_id} value={c.user_id}>
-                  {c.first_name} {c.last_name} • {c.cleaner_profile.service_type} •{" "}
-                  {c.cleaner_profile.hourly_rate != null ? `$${c.cleaner_profile.hourly_rate}/hr` : "Rate N/A"} •{" "}
-                  {c.cleaner_profile.years_experience} yrs
-                </option>
-              ))}
-            </select>
-            <div className="form-text">
-              Pick a cleaner you trust. If not selected, we’ll treat it as “no preference”.
+            <label className="form-label fw-semibold">Cleaner Selection</label>
+            <div className="d-flex rounded overflow-hidden border mb-3" style={{ maxWidth: 360 }}>
+              <button
+                type="button"
+                className={`btn flex-fill rounded-0 border-0 ${cleanerMode === 'auto' ? 'btn-primary' : 'btn-light'}`}
+                onClick={() => { setCleanerMode('auto'); setPreferredCleanerId(''); }}
+              >
+                Auto-match
+              </button>
+              <button
+                type="button"
+                className={`btn flex-fill rounded-0 border-0 ${cleanerMode === 'manual' ? 'btn-primary' : 'btn-light'}`}
+                onClick={() => setCleanerMode('manual')}
+              >
+                Choose a cleaner
+              </button>
             </div>
+
+            {cleanerMode === 'auto' ? (
+              <div className="form-text">
+                We'll automatically match the best available cleaner based on your service type, date, and location.
+              </div>
+            ) : (
+              <>
+                <select
+                  className="form-select"
+                  value={preferredCleanerId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPreferredCleanerId(v === "" ? "" : Number(v));
+                  }}
+                >
+                  <option value="">Select a cleaner...</option>
+                  {cleaners.map((c) => (
+                    <option key={c.user_id} value={c.user_id}>
+                      {c.first_name} {c.last_name} • {c.cleaner_profile.service_type} •{" "}
+                      {c.cleaner_profile.hourly_rate != null ? `$${c.cleaner_profile.hourly_rate}/hr` : "Rate N/A"} •{" "}
+                      {c.cleaner_profile.years_experience} yrs
+                    </option>
+                  ))}
+                </select>
+                <div className="form-text">
+                  Only showing cleaners available for your selected date and location.
+                </div>
+              </>
+            )}
           </div>
           <div className="d-flex gap-2">
             <button className="btn btn-primary" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Job Request'}
+              {loading ? 'Creating...' : 'Create job request'}
             </button>
             <Link to="/job-requests" className="btn btn-outline-secondary">
               Cancel

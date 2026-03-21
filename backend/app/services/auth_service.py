@@ -76,6 +76,10 @@ class AuthService:
 
         now = datetime.now(timezone.utc)
 
+        # Check if user is banned
+        if user.is_banned:
+            raise ValueError("banned|Your account has been banned. Contact support for assistance.")
+
         # Check user locked
         if user.locked_until and user.locked_until > now:
             raise ValueError("locked|Too many failed attempts. Try again later.")

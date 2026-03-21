@@ -4,7 +4,7 @@ import { apiRequest } from './client';
 // TYPES
 // =============================================
 
-export type JobStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+export type JobStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
 export type ServiceType = 'partial' | 'full';
 
 export type JobRequest = {
@@ -19,6 +19,8 @@ export type JobRequest = {
   preferred_time_start: string | null;
   preferred_time_end: string | null;
   status: JobStatus;
+  priority_window_end: string | null;
+  is_in_priority_window: boolean;
   created_at: string;
   updated_at: string;
   end_user: {

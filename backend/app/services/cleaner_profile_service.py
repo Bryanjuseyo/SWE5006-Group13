@@ -68,7 +68,7 @@ class CleanerProfileService:
             db.session.query(User, UserProfile, CleanerProfile)
             .join(UserProfile, UserProfile.user_id == User.id)
             .join(CleanerProfile, CleanerProfile.user_id == User.id)
-            .filter(User.role == UserRole.cleaner)
+            .filter(User.role == UserRole.cleaner, User.is_banned.is_(False))
             .order_by(UserProfile.first_name.asc(), UserProfile.last_name.asc())
             .all()
         )
