@@ -196,9 +196,14 @@ export default function JobRequestList() {
                           Priority window - awaiting response
                         </span>
                       )}
+                      {job.status === 'pending' && !job.is_in_priority_window && job.priority_window_end && (
+                        <span className="badge bg-warning text-dark ms-2">
+                          Open to all cleaners
+                        </span>
+                      )}
                     </div>
                   )}
-                  {job.status === 'pending' && !job.cleaner_id && !job.cleaner && (
+                  {job.status === 'pending' && !job.cleaner_id && (
                     <div className="mt-2">
                       <span className="badge bg-secondary">Open to all cleaners</span>
                     </div>

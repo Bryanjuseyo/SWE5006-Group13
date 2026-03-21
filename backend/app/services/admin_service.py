@@ -120,7 +120,7 @@ class AdminService:
 
         # Handle active job requests for the banned user
         if user.role == UserRole.cleaner:
-            # Unassign from pending/confirmed jobs — open them to other cleaners
+            # Unassign from pending/confirmed jobs - open them to other cleaners
             assigned_jobs = JobRequest.query.filter(
                 JobRequest.cleaner_id == user_id,
                 JobRequest.status.in_([JobStatus.pending, JobStatus.confirmed]),

@@ -261,23 +261,20 @@ class JobRequestService:
         if not job_request:
             raise ValueError("not_found|Job request not found.")
 
-        # Expire priority window if needed
-        now = datetime.now(timezone.utc)
-        if (job_request.status == JobStatus.pending
-                and job_request.priority_window_end is not None
-                and job_request.priority_window_end < now
-                and job_request.cleaner_id is not None):
-            job_request.cleaner_id = None
-            job_request.priority_window_end = None
-            db.session.commit()
-
         # Check authorization
+        now = datetime.now(timezone.utc)
         if role == "end_user" and job_request.end_user_id != user_id:
             raise ValueError("forbidden|You are not authorized to view this job request.")
         if role == "cleaner":
             is_assigned_to_cleaner = job_request.cleaner_id == user_id
             is_open_pending = job_request.cleaner_id is None and job_request.status == JobStatus.pending
-            if not is_assigned_to_cleaner and not is_open_pending:
+            # Allow viewing if priority window has expired (open to all)
+            is_expired_priority = (
+                job_request.status == JobStatus.pending
+                and job_request.priority_window_end is not None
+                and job_request.priority_window_end < now
+            )
+            if not is_assigned_to_cleaner and not is_open_pending and not is_expired_priority:
                 raise ValueError("forbidden|You are not authorized to view this job request.")
 
         return {"job_request": job_request.to_dict()}
@@ -293,38 +290,33 @@ class JobRequestService:
         End users see their own requests.
         Cleaners see requests assigned to them.
         """
-        # Expire priority windows: if window has passed and job is still pending,
-        # clear the preferred cleaner so the job opens to all cleaners
         now = datetime.now(timezone.utc)
-        expired_jobs = JobRequest.query.filter(
-            JobRequest.status == JobStatus.pending,
-            JobRequest.priority_window_end.isnot(None),
-            JobRequest.priority_window_end < now,
-            JobRequest.cleaner_id.isnot(None),
-        ).all()
-        for job in expired_jobs:
-            job.cleaner_id = None
-            job.priority_window_end = None
-        if expired_jobs:
-            db.session.commit()
 
         if role == "end_user":
             query = JobRequest.query.filter_by(end_user_id=user_id)
         elif role == "cleaner":
-            # Filter open jobs by the cleaner's service_type
             cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
             cleaner_service_type = cleaner_profile.service_type if cleaner_profile else None
 
             if cleaner_service_type:
-                # Open jobs: no cleaner assigned, pending, matching service type
+                # Open jobs: pending, matching service type, and either:
+                # - no cleaner assigned, OR
+                # - has a preferred cleaner but priority window has expired
                 open_job_filter = and_(
-                    JobRequest.cleaner_id.is_(None),
                     JobRequest.status == JobStatus.pending,
                     JobRequest.service_type == cleaner_service_type,
+                    or_(
+                        JobRequest.cleaner_id.is_(None),
+                        and_(
+                            JobRequest.priority_window_end.isnot(None),
+                            JobRequest.priority_window_end < now,
+                        ),
+                    ),
                 )
             else:
                 open_job_filter = false()
 
+            # cleaner_id == user_id covers assigned jobs + priority window jobs
             query = JobRequest.query.filter(
                 or_(
                     JobRequest.cleaner_id == user_id,
@@ -479,19 +471,6 @@ class JobRequestService:
         today = date.today()
         now = datetime.now(timezone.utc)
 
-        # Expire priority windows first
-        expired_jobs = JobRequest.query.filter(
-            JobRequest.status == JobStatus.pending,
-            JobRequest.priority_window_end.isnot(None),
-            JobRequest.priority_window_end < now,
-            JobRequest.cleaner_id.isnot(None),
-        ).all()
-        for job in expired_jobs:
-            job.cleaner_id = None
-            job.priority_window_end = None
-        if expired_jobs:
-            db.session.commit()
-
         jobs = (
             JobRequest.query
             .filter(
@@ -499,10 +478,16 @@ class JobRequestService:
                 JobRequest.service_type == cleaner_profile.service_type,
                 JobRequest.preferred_date >= today,
                 JobRequest.deleted_at.is_(None),
-                # Show jobs that are either: open (no cleaner), or assigned to this cleaner
                 or_(
+                    # No cleaner assigned
                     JobRequest.cleaner_id.is_(None),
+                    # Assigned to this cleaner (preferred or otherwise)
                     JobRequest.cleaner_id == user_id,
+                    # Has a preferred cleaner but priority window expired
+                    and_(
+                        JobRequest.priority_window_end.isnot(None),
+                        JobRequest.priority_window_end < now,
+                    ),
                 ),
             )
             .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
@@ -537,7 +522,7 @@ class JobRequestService:
             if slot.start_time is None and slot.end_time is None:
                 return True  # slot covers the whole day
 
-            # Job has no time preference at all — fits any open slot
+            # Job has no time preference at all - fits any open slot
             if job.preferred_time_start is None and job.preferred_time_end is None:
                 return True
 

@@ -87,7 +87,7 @@ export default function ViewCleanersPage() {
                     <div>
                       <div className="text-muted small">Hourly Rate</div>
                       <div>
-                        {c.cleaner_profile?.hourly_rate != null ? `$${c.cleaner_profile.hourly_rate}` : '—'}
+                        {c.cleaner_profile?.hourly_rate != null ? `$${c.cleaner_profile.hourly_rate}` : '-'}
                       </div>
                     </div>
                     <div className="text-end">

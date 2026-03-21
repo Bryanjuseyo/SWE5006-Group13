@@ -199,6 +199,11 @@ export default function JobRequestDetailPage() {
                     </small>
                   </div>
                 )}
+                {jobRequest.status === 'pending' && jobRequest.cleaner_id && !jobRequest.is_in_priority_window && jobRequest.priority_window_end && (
+                  <div className="mt-1">
+                    <span className="badge bg-warning text-dark">Priority window expired - Open to all cleaners</span>
+                  </div>
+                )}
                 {jobRequest.status === 'pending' && !jobRequest.cleaner_id && (
                   <div className="mt-1">
                     <span className="badge bg-secondary">Open to all cleaners</span>

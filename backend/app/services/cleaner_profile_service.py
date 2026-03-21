@@ -171,7 +171,7 @@ class CleanerProfileService:
     @staticmethod
     def _slots_overlap(existing, new_start_date, new_end_date, new_start_time, new_end_time) -> bool:
         """Return True if the new slot's date/time range overlaps with an existing slot."""
-        # No date overlap — no conflict
+        # No date overlap - no conflict
         if new_start_date > existing.end_date or existing.start_date > new_end_date:
             return False
 
@@ -179,7 +179,7 @@ class CleanerProfileService:
         if existing.start_time is None or new_start_time is None:
             return True
 
-        # Both have times — check time range overlap.
+        # Both have times - check time range overlap.
         # Treat a missing end_time as end of day.
         _END_OF_DAY = time_type(23, 59, 59)
         existing_end = existing.end_time or _END_OF_DAY

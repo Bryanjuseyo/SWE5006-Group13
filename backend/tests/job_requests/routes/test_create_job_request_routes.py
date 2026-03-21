@@ -1,5 +1,5 @@
 """
-Create a new job request — route tests.
+Create a new job request - route tests.
 """
 from tests.job_requests.routes.conftest import FUTURE_DATE, PAST_DATE, VALID_PAYLOAD
 

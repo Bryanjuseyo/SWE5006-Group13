@@ -1,5 +1,5 @@
 """
-Create a new job request — service layer tests.
+Create a new job request - service layer tests.
 """
 import pytest
 from datetime import date, datetime

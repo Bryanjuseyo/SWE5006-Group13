@@ -125,14 +125,14 @@ class MatchingService:
                     score += 30
                     break
         else:
-            # No availability set — assume available (+15 partial credit)
+            # No availability set - assume available (+15 partial credit)
             score += 15
 
         # Experience bonus (up to +20)
         exp = profile.years_experience or 0
         score += min(exp * 2, 20)
 
-        # Rate competitiveness bonus (up to +10 — lower rate gets higher score)
+        # Rate competitiveness bonus (up to +10 - lower rate gets higher score)
         if profile.hourly_rate:
             rate = float(profile.hourly_rate)
             if rate <= 20:
