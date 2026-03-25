@@ -26,6 +26,13 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+      - name: Snyk frontend scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-build
@@ -68,6 +75,13 @@ jobs:
         run: |
           pip install flake8
           flake8 . --max-line-length=120
+
+      - name: Snyk backend scan
+        uses: snyk/actions/python@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
 
       - name: Run tests
         env:
