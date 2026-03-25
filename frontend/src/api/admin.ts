@@ -1,5 +1,5 @@
 import { apiRequest } from './client';
-import type { JobRequest, JobStatus } from './job_requests';
+import type { JobRequest } from './job_requests';
 
 // =============================================
 // TYPES
