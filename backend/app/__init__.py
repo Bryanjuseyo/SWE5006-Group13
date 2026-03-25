@@ -1,9 +1,12 @@
 from flask import Flask
+from flask_migrate import Migrate
 from .config import Config
 from .extensions import cors
 from .models import db, bcrypt
 
 from flask_cors import CORS
+
+migrate = Migrate()
 
 from .api.health import bp as health_bp
 from app.api.auth import auth_bp
@@ -23,6 +26,7 @@ def create_app():
 
     db.init_app(app)
     bcrypt.init_app(app)
+    migrate.init_app(app, db)
 
     # Health
     app.register_blueprint(health_bp, url_prefix="/api")

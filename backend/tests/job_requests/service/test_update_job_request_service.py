@@ -1,5 +1,5 @@
 """
-Update job request details — service layer tests.
+Update job request details - service layer tests.
 """
 import pytest
 from datetime import date, datetime

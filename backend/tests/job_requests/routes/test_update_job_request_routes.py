@@ -1,5 +1,5 @@
 """
-Update job request details — route tests.
+Update job request details - route tests.
 """
 from tests.job_requests.routes.conftest import PAST_DATE
 

@@ -1,5 +1,5 @@
 """
-Delete a job request — service layer tests.
+Delete a job request - service layer tests.
 """
 import pytest
 from app.services.job_request_service import JobRequestService

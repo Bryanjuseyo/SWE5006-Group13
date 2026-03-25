@@ -41,6 +41,16 @@ export default function Navbar() {
                   View Cleaners
                 </Link>
               )}
+              {user.role === 'administrator' && (
+                <>
+                  <Link to="/admin/users" className="btn btn-outline-secondary btn-sm">
+                    Users
+                  </Link>
+                  <Link to="/admin/bookings" className="btn btn-outline-secondary btn-sm">
+                    Bookings
+                  </Link>
+                </>
+              )}
               <Link to="/profile" className="btn btn-outline-primary btn-sm">
                 Profile
               </Link>

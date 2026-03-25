@@ -1,8 +1,8 @@
 from typing import Dict, Any, Optional
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 
-from sqlalchemy import or_, false
-from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile
+from sqlalchemy import or_, and_, false
+from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile, PRIORITY_WINDOW_HOURS
 
 
 class JobRequestService:
@@ -85,10 +85,16 @@ class JobRequestService:
         if "cleaner_id" in updates:
             updates["cleaner_id"] = JobRequestService._validate_cleaner_id(updates.get("cleaner_id"))
 
+        # Set priority window if a preferred cleaner is selected
+        priority_window_end = None
+        if updates.get("cleaner_id"):
+            priority_window_end = datetime.now(timezone.utc) + timedelta(hours=PRIORITY_WINDOW_HOURS)
+
         # Create job request
         job_request = JobRequest(
             end_user_id=end_user_id,
             status=JobStatus.pending,
+            priority_window_end=priority_window_end,
             **updates
         )
         db.session.add(job_request)
@@ -201,6 +207,13 @@ class JobRequestService:
         for k, v in updates.items():
             setattr(job_request, k, v)
 
+        # Reset priority window when preferred cleaner changes
+        if "cleaner_id" in updates:
+            if job_request.cleaner_id:
+                job_request.priority_window_end = datetime.now(timezone.utc) + timedelta(hours=PRIORITY_WINDOW_HOURS)
+            else:
+                job_request.priority_window_end = None
+
         db.session.commit()
 
         return {
@@ -249,12 +262,19 @@ class JobRequestService:
             raise ValueError("not_found|Job request not found.")
 
         # Check authorization
+        now = datetime.now(timezone.utc)
         if role == "end_user" and job_request.end_user_id != user_id:
             raise ValueError("forbidden|You are not authorized to view this job request.")
         if role == "cleaner":
             is_assigned_to_cleaner = job_request.cleaner_id == user_id
             is_open_pending = job_request.cleaner_id is None and job_request.status == JobStatus.pending
-            if not is_assigned_to_cleaner and not is_open_pending:
+            # Allow viewing if priority window has expired (open to all)
+            is_expired_priority = (
+                job_request.status == JobStatus.pending
+                and job_request.priority_window_end is not None
+                and job_request.priority_window_end < now
+            )
+            if not is_assigned_to_cleaner and not is_open_pending and not is_expired_priority:
                 raise ValueError("forbidden|You are not authorized to view this job request.")
 
         return {"job_request": job_request.to_dict()}
@@ -270,23 +290,33 @@ class JobRequestService:
         End users see their own requests.
         Cleaners see requests assigned to them.
         """
+        now = datetime.now(timezone.utc)
+
         if role == "end_user":
             query = JobRequest.query.filter_by(end_user_id=user_id)
         elif role == "cleaner":
-            # Filter open jobs by the cleaner's service_type
             cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
             cleaner_service_type = cleaner_profile.service_type if cleaner_profile else None
 
             if cleaner_service_type:
-                open_job_filter = (
-                    JobRequest.cleaner_id.is_(None) &
-                    (JobRequest.status == JobStatus.pending) &
-                    (JobRequest.service_type == cleaner_service_type)
+                # Open jobs: pending, matching service type, and either:
+                # - no cleaner assigned, OR
+                # - has a preferred cleaner but priority window has expired
+                open_job_filter = and_(
+                    JobRequest.status == JobStatus.pending,
+                    JobRequest.service_type == cleaner_service_type,
+                    or_(
+                        JobRequest.cleaner_id.is_(None),
+                        and_(
+                            JobRequest.priority_window_end.isnot(None),
+                            JobRequest.priority_window_end < now,
+                        ),
+                    ),
                 )
             else:
-                # No profile set — show no open jobs, only assigned ones
                 open_job_filter = false()
 
+            # cleaner_id == user_id covers assigned jobs + priority window jobs
             query = JobRequest.query.filter(
                 or_(
                     JobRequest.cleaner_id == user_id,
@@ -361,12 +391,28 @@ class JobRequestService:
             is_open_pending = current_status == JobStatus.pending
 
             if is_open_pending:
-                # Any cleaner can claim a pending job (preferred cleaner is a soft hint)
-                if new_status_enum != JobStatus.confirmed:
+                if new_status_enum == JobStatus.cancelled:
+                    # Preferred cleaner is declining during priority window
+                    if job_request.cleaner_id == user_id:
+                        job_request.cleaner_id = None
+                        job_request.priority_window_end = None
+                        db.session.commit()
+                        return {
+                            "message": "You have declined this job. It is now open to all cleaners.",
+                            "job_request": job_request.to_dict()
+                        }
+                    else:
+                        raise ValueError(
+                            "forbidden|You are not authorized to decline this job request."
+                        )
+                elif new_status_enum != JobStatus.confirmed:
                     raise ValueError(
                         "invalid_status|Can only confirm (accept) a pending job."
                     )
-                job_request.cleaner_id = user_id
+                else:
+                    # Cleaner is accepting the job
+                    job_request.cleaner_id = user_id
+                    job_request.priority_window_end = None
             elif job_request.cleaner_id != user_id:
                 raise ValueError("forbidden|You are not authorized to update this job request.")
             else:
@@ -416,12 +462,15 @@ class JobRequestService:
         """
         Return open (unassigned, pending) job requests that match the cleaner's
         service_type and fall within their availability slots.
+        Excludes jobs in a priority window for a different cleaner.
         """
         cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
         if not cleaner_profile:
             return {"job_requests": []}
 
         today = date.today()
+        now = datetime.now(timezone.utc)
+
         jobs = (
             JobRequest.query
             .filter(
@@ -429,6 +478,17 @@ class JobRequestService:
                 JobRequest.service_type == cleaner_profile.service_type,
                 JobRequest.preferred_date >= today,
                 JobRequest.deleted_at.is_(None),
+                or_(
+                    # No cleaner assigned
+                    JobRequest.cleaner_id.is_(None),
+                    # Assigned to this cleaner (preferred or otherwise)
+                    JobRequest.cleaner_id == user_id,
+                    # Has a preferred cleaner but priority window expired
+                    and_(
+                        JobRequest.priority_window_end.isnot(None),
+                        JobRequest.priority_window_end < now,
+                    ),
+                ),
             )
             .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
             .all()
@@ -462,7 +522,7 @@ class JobRequestService:
             if slot.start_time is None and slot.end_time is None:
                 return True  # slot covers the whole day
 
-            # Job has no time preference at all — fits any open slot
+            # Job has no time preference at all - fits any open slot
             if job.preferred_time_start is None and job.preferred_time_end is None:
                 return True
 
@@ -492,5 +552,8 @@ class JobRequestService:
 
         if cleaner.role != UserRole.cleaner:
             raise ValueError("invalid_request|Selected user is not a cleaner")
+
+        if cleaner.is_banned:
+            raise ValueError("invalid_request|This cleaner is currently unavailable.")
 
         return cleaner_id

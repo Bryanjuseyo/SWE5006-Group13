@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, g
 from app.api.auth.decorators import jwt_required, roles_required
 from app.services.job_request_service import JobRequestService
+from app.services.matching_service import MatchingService
 
 job_requests_bp = Blueprint("job_requests", __name__)
 
@@ -149,6 +150,41 @@ def update_job_status(job_request_id):
         result = JobRequestService.update_job_status(
             job_request_id, user_id, role, new_status
         )
+        return jsonify(result), 200
+    except ValueError as e:
+        return _handle_error(e)
+
+
+# =============================================
+# AUTOMATED CLEANER MATCHING
+# =============================================
+
+
+@job_requests_bp.get("/<int:job_request_id>/match")
+@jwt_required
+@roles_required("end_user", "administrator")
+def match_cleaners(job_request_id):
+    """Find matching cleaners for a job request."""
+    user_id = g.user["user_id"]
+    role = g.user["role"]
+
+    try:
+        result = MatchingService.find_matching_cleaners(job_request_id, user_id, role)
+        return jsonify(result), 200
+    except ValueError as e:
+        return _handle_error(e)
+
+
+@job_requests_bp.post("/<int:job_request_id>/auto-assign")
+@jwt_required
+@roles_required("end_user", "administrator")
+def auto_assign_cleaner(job_request_id):
+    """Auto-assign the best matching cleaner to a job request."""
+    user_id = g.user["user_id"]
+    role = g.user["role"]
+
+    try:
+        result = MatchingService.auto_assign_cleaner(job_request_id, user_id, role)
         return jsonify(result), 200
     except ValueError as e:
         return _handle_error(e)
