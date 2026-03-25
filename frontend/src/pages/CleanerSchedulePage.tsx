@@ -9,6 +9,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  rejected: 'rejected',
 };
 
 const STATUS_COLORS: Record<JobStatus, string> = {
@@ -17,6 +18,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   in_progress: 'primary',
   completed: 'success',
   cancelled: 'secondary',
+  rejected: 'rejected',
 };
 
 function formatDate(d: string) {
