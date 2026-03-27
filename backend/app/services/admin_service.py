@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
 from app.models import (
-    db, User, UserRole, UserProfile, JobRequest, JobStatus, CleanerProfile,
+    db, User, UserRole, UserProfile, JobRequest, JobStatus,
 )
 
 
