@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.models import (
     db, User, UserRole, UserProfile, JobRequest, JobStatus,
-    CleanerProfile, CleanerAvailability, ServiceType, PRIORITY_WINDOW_HOURS,
+    CleanerProfile, PRIORITY_WINDOW_HOURS,
 )
 
 

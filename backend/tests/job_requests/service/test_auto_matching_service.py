@@ -518,7 +518,7 @@ def test_auto_assign_cleaner_success(app):
         assert result["job_request"]["id"] == job.id
         assert updated_job.cleaner_id == cleaner.id
         assert updated_job.priority_window_end is not None
-        assert f"Cleaner Best Cleaner has been assigned to the job." == result["message"]
+        assert "Cleaner Best Cleaner has been assigned to the job." == result["message"]
 
 
 def test_auto_assign_cleaner_sets_priority_window_end(app):

@@ -45,7 +45,6 @@ def create_job(
 
 def test_get_dashboard_stats_returns_correct_counts(app):
     with app.app_context():
-        admin = create_user("admin@test.com", UserRole.administrator)
         end_user_1 = create_user("end1@test.com", UserRole.end_user)
         end_user_2 = create_user("end2@test.com", UserRole.end_user, is_banned=True)
         cleaner_1 = create_user("cleaner1@test.com", UserRole.cleaner)
