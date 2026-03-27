@@ -6,6 +6,7 @@ from app.services.job_request_service import JobRequestService
 from app.models import JobStatus, ServiceType
 from datetime import datetime, timezone, timedelta
 
+
 def test_view_not_found_raises_error(mocker):
     """Viewing non-existent job request should raise error."""
     mock_query = mocker.Mock()

@@ -200,6 +200,7 @@ def test_ban_user_ignores_deleted_jobs(app):
         db.session.refresh(deleted_job)
         assert deleted_job.status == JobStatus.pending
 
+
 def create_user_profile(user_id, first_name="Test", last_name="User"):
     profile = UserProfile(
         user_id=user_id,
