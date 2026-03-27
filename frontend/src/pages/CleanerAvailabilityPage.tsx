@@ -10,7 +10,10 @@ import {
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString(undefined, {
-    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
   });
 }
 
@@ -20,6 +23,13 @@ function formatTime(t: string | null) {
   const date = new Date();
   date.setHours(Number(h), Number(m));
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
 }
 
 export default function CleanerAvailabilityPage() {
@@ -43,14 +53,16 @@ export default function CleanerAvailabilityPage() {
     try {
       const res = await getAvailability();
       setSlots(res.availability);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load availability.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to load availability.'));
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   function resetForm() {
     setEditingId(null);
@@ -113,8 +125,8 @@ export default function CleanerAvailabilityPage() {
       }
       resetForm();
       await load();
-    } catch (e: any) {
-      setError(e?.message || 'Failed to save availability slot.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to save availability slot.'));
     } finally {
       setSaving(false);
     }
@@ -129,8 +141,8 @@ export default function CleanerAvailabilityPage() {
       setSlots((prev) => prev.filter((s) => s.id !== id));
       setSuccess('Availability slot removed.');
       if (editingId === id) resetForm();
-    } catch (e: any) {
-      setError(e?.message || 'Failed to remove slot.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to remove slot.'));
     }
   }
 
@@ -139,12 +151,13 @@ export default function CleanerAvailabilityPage() {
       <Navbar />
       <main className="container py-5" style={{ maxWidth: 760 }}>
         <h1 className="h3 fw-bold mb-1">Availability Management</h1>
-        <p className="text-muted mb-4">Set your available date ranges and optional time windows so clients know when you can work.</p>
+        <p className="text-muted mb-4">
+          Set your available date ranges and optional time windows so clients know when you can work.
+        </p>
 
         {error && <div className="alert alert-danger">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Add / Edit form */}
         <div className="card shadow-sm mb-5">
           <div className="card-header fw-semibold d-flex justify-content-between align-items-center">
             <span>{editingId !== null ? 'Edit Availability Slot' : 'Add Availability Slot'}</span>
@@ -158,7 +171,9 @@ export default function CleanerAvailabilityPage() {
             <form onSubmit={handleSubmit}>
               <div className="row g-3 mb-3">
                 <div className="col-md-6">
-                  <label className="form-label">Start Date <span className="text-danger">*</span></label>
+                  <label className="form-label">
+                    Start Date <span className="text-danger">*</span>
+                  </label>
                   <input
                     type="date"
                     className="form-control"
@@ -168,7 +183,9 @@ export default function CleanerAvailabilityPage() {
                   />
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label">End Date <span className="text-danger">*</span></label>
+                  <label className="form-label">
+                    End Date <span className="text-danger">*</span>
+                  </label>
                   <input
                     type="date"
                     className="form-control"
@@ -180,7 +197,9 @@ export default function CleanerAvailabilityPage() {
               </div>
               <div className="row g-3 mb-3">
                 <div className="col-md-6">
-                  <label className="form-label">Start Time <span className="text-muted">(optional)</span></label>
+                  <label className="form-label">
+                    Start Time <span className="text-muted">(optional)</span>
+                  </label>
                   <input
                     type="time"
                     className="form-control"
@@ -189,7 +208,9 @@ export default function CleanerAvailabilityPage() {
                   />
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label">End Time <span className="text-muted">(optional)</span></label>
+                  <label className="form-label">
+                    End Time <span className="text-muted">(optional)</span>
+                  </label>
                   <input
                     type="time"
                     className="form-control"
@@ -205,7 +226,6 @@ export default function CleanerAvailabilityPage() {
           </div>
         </div>
 
-        {/* Existing slots */}
         <h2 className="h5 fw-semibold mb-3">Your Availability Slots</h2>
         {loading ? (
           <div className="text-center py-4">
@@ -220,12 +240,16 @@ export default function CleanerAvailabilityPage() {
             {slots.map((slot) => (
               <div
                 key={slot.id}
-                className={`list-group-item d-flex justify-content-between align-items-center ${editingId === slot.id ? 'list-group-item-warning' : ''}`}
+                className={`list-group-item d-flex justify-content-between align-items-center ${editingId === slot.id ? 'list-group-item-warning' : ''
+                  }`}
               >
                 <div>
                   <span className="fw-medium">{formatDate(slot.start_date)}</span>
                   {slot.start_date !== slot.end_date && (
-                    <> &rarr; <span className="fw-medium">{formatDate(slot.end_date)}</span></>
+                    <>
+                      {' '}
+                      &rarr; <span className="fw-medium">{formatDate(slot.end_date)}</span>
+                    </>
                   )}
                   {slot.start_time && (
                     <span className="ms-3 text-muted small">

@@ -19,6 +19,13 @@ function isValidPhone(phone: string) {
   return /^[89]\d{7}$/.test(phone);
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function RegisterPage() {
   const navigate = useNavigate();
 
@@ -65,8 +72,8 @@ export default function RegisterPage() {
       const res = await register({ email: eTrim, password, role });
       setAuth(res.token, res.user);
       setStep(2);
-    } catch (err: any) {
-      setError(err?.message || 'Registration failed.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Registration failed.'));
     } finally {
       setLoading(false);
     }
@@ -99,8 +106,8 @@ export default function RegisterPage() {
       } else {
         navigate('/dashboard', { replace: true });
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to save profile.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save profile.'));
     } finally {
       setLoading(false);
     }
@@ -133,8 +140,8 @@ export default function RegisterPage() {
         years_experience: yearsInt,
       });
       navigate('/dashboard', { replace: true });
-    } catch (err: any) {
-      setError(err?.message || 'Failed to save cleaner profile.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save cleaner profile.'));
     } finally {
       setLoading(false);
     }
@@ -146,22 +153,31 @@ export default function RegisterPage() {
       <main className="container py-5" style={{ maxWidth: 520 }}>
         <h1 className="h3 fw-bold mb-1">Create an account</h1>
 
-        {/* Step indicator */}
         <div className="d-flex align-items-center gap-2 mb-4">
           <span className={`badge rounded-pill ${step === 1 ? 'bg-primary' : 'bg-success'}`}>
             {step === 1 ? '1' : '✓'}
           </span>
           <span className={step === 1 ? 'fw-semibold' : 'text-muted'}>Account info</span>
           <span className="text-muted mx-1">→</span>
-          <span className={`badge rounded-pill ${step === 2 ? 'bg-primary' : step > 2 ? 'bg-success' : 'bg-secondary'}`}>
+          <span
+            className={`badge rounded-pill ${step === 2 ? 'bg-primary' : step > 2 ? 'bg-success' : 'bg-secondary'
+              }`}
+          >
             {step > 2 ? '✓' : '2'}
           </span>
           <span className={step === 2 ? 'fw-semibold' : 'text-muted'}>Your profile</span>
           {(role === 'cleaner' || step === 3) && (
             <>
               <span className="text-muted mx-1">→</span>
-              <span className={`badge rounded-pill ${step === 3 ? 'bg-primary' : 'bg-secondary'}`}>3</span>
-              <span className={step === 3 ? 'fw-semibold' : 'text-muted'}>Cleaner details</span>
+              <span
+                className={`badge rounded-pill ${step === 3 ? 'bg-primary' : 'bg-secondary'
+                  }`}
+              >
+                3
+              </span>
+              <span className={step === 3 ? 'fw-semibold' : 'text-muted'}>
+                Cleaner details
+              </span>
             </>
           )}
         </div>
@@ -225,11 +241,15 @@ export default function RegisterPage() {
 
         {step === 2 && (
           <form onSubmit={onStep2Submit} className="card p-4 shadow-sm">
-            <p className="text-muted mb-3">Tell us a bit about yourself to complete your account setup.</p>
+            <p className="text-muted mb-3">
+              Tell us a bit about yourself to complete your account setup.
+            </p>
 
             <div className="row g-3 mb-3">
               <div className="col-6">
-                <label className="form-label">First name <span className="text-danger">*</span></label>
+                <label className="form-label">
+                  First name <span className="text-danger">*</span>
+                </label>
                 <input
                   className="form-control"
                   type="text"
@@ -240,7 +260,9 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="col-6">
-                <label className="form-label">Last name <span className="text-danger">*</span></label>
+                <label className="form-label">
+                  Last name <span className="text-danger">*</span>
+                </label>
                 <input
                   className="form-control"
                   type="text"
@@ -253,7 +275,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Phone <span className="text-muted">(optional)</span></label>
+              <label className="form-label">
+                Phone <span className="text-muted">(optional)</span>
+              </label>
               <input
                 className="form-control"
                 type="tel"
@@ -264,7 +288,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Address <span className="text-muted">(optional)</span></label>
+              <label className="form-label">
+                Address <span className="text-muted">(optional)</span>
+              </label>
               <input
                 className="form-control"
                 type="text"
@@ -275,7 +301,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="mb-4">
-              <label className="form-label">City <span className="text-muted">(optional)</span></label>
+              <label className="form-label">
+                City <span className="text-muted">(optional)</span>
+              </label>
               <input
                 className="form-control"
                 type="text"
@@ -286,17 +314,25 @@ export default function RegisterPage() {
             </div>
 
             <button className="btn btn-success w-100" disabled={loading}>
-              {loading ? 'Saving profile...' : role === 'cleaner' ? 'Next: Cleaner details' : 'Complete registration'}
+              {loading
+                ? 'Saving profile...'
+                : role === 'cleaner'
+                  ? 'Next: Cleaner details'
+                  : 'Complete registration'}
             </button>
           </form>
         )}
 
         {step === 3 && (
           <form onSubmit={onStep3Submit} className="card p-4 shadow-sm">
-            <p className="text-muted mb-3">Set up your cleaner profile so end users can find and book you.</p>
+            <p className="text-muted mb-3">
+              Set up your cleaner profile so end users can find and book you.
+            </p>
 
             <div className="mb-3">
-              <label className="form-label">Service Type <span className="text-danger">*</span></label>
+              <label className="form-label">
+                Service Type <span className="text-danger">*</span>
+              </label>
               <select
                 className="form-select"
                 value={serviceType}
@@ -309,7 +345,9 @@ export default function RegisterPage() {
 
             <div className="row g-3 mb-4">
               <div className="col-md-6">
-                <label className="form-label">Hourly Rate (SGD) <span className="text-muted">(optional)</span></label>
+                <label className="form-label">
+                  Hourly Rate (SGD) <span className="text-muted">(optional)</span>
+                </label>
                 <input
                   className="form-control"
                   type="number"
@@ -321,7 +359,9 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="col-md-6">
-                <label className="form-label">Years of Experience <span className="text-danger">*</span></label>
+                <label className="form-label">
+                  Years of Experience <span className="text-danger">*</span>
+                </label>
                 <input
                   className="form-control"
                   type="number"

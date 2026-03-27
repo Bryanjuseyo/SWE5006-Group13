@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '../components/Navbar';
 import { getToken } from '../auth/storage';
 import { getCleanerSchedule, updateJobStatus, type JobRequest, type JobStatus } from '../api/job_requests';
@@ -9,7 +9,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  rejected: 'rejected',
+  rejected: 'Rejected',
 };
 
 const STATUS_COLORS: Record<JobStatus, string> = {
@@ -18,12 +18,15 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   in_progress: 'primary',
   completed: 'success',
   cancelled: 'secondary',
-  rejected: 'rejected',
+  rejected: 'danger',
 };
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString(undefined, {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 }
 
@@ -35,44 +38,57 @@ function formatTime(t: string | null) {
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function CleanerSchedulePage() {
   const token = getToken();
   const [schedule, setSchedule] = useState<JobRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await getCleanerSchedule(token!);
       setSchedule(res.schedule);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load schedule.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to load schedule.'));
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function handleStatusChange(id: number, newStatus: JobStatus) {
     try {
       const res = await updateJobStatus(id, newStatus, token!);
-      setSchedule((prev) => prev.map((j) => (j.id === id ? res.job_request : j))
-        .filter((j) => ['confirmed', 'in_progress'].includes(j.status)));
-    } catch (e: any) {
-      alert(e?.message || 'Failed to update status.');
+      setSchedule((prev) =>
+        prev
+          .map((j) => (j.id === id ? res.job_request : j))
+          .filter((j) => j.status === 'confirmed' || j.status === 'in_progress')
+      );
+    } catch (e: unknown) {
+      alert(getErrorMessage(e, 'Failed to update status.'));
     }
   }
 
   async function handleCancel(id: number) {
     if (!confirm('Cancel this job? The client will be notified.')) return;
+
     try {
       const res = await updateJobStatus(id, 'cancelled', token!);
       setSchedule((prev) => prev.filter((j) => j.id !== res.job_request.id));
-    } catch (e: any) {
-      alert(e?.message || 'Failed to cancel job.');
+    } catch (e: unknown) {
+      alert(getErrorMessage(e, 'Failed to cancel job.'));
     }
   }
 
@@ -92,7 +108,9 @@ export default function CleanerSchedulePage() {
             </div>
           </div>
         ) : schedule.length === 0 ? (
-          <div className="alert alert-info">No upcoming jobs scheduled. Accept some jobs to get started.</div>
+          <div className="alert alert-info">
+            No upcoming jobs scheduled. Accept some jobs to get started.
+          </div>
         ) : (
           <div className="d-flex flex-column gap-3">
             {schedule.map((job) => (
@@ -108,15 +126,14 @@ export default function CleanerSchedulePage() {
                     <small className="text-muted">#{job.id}</small>
                   </div>
 
-                  {job.description && (
-                    <p className="text-muted small mb-2">{job.description}</p>
-                  )}
+                  {job.description && <p className="text-muted small mb-2">{job.description}</p>}
 
                   <div className="row g-2 mt-1">
                     <div className="col-auto">
                       <small className="text-muted">Date:</small>{' '}
                       <strong>{formatDate(job.preferred_date!)}</strong>
                     </div>
+
                     {job.preferred_time_start && (
                       <div className="col-auto">
                         <small className="text-muted">Time:</small>{' '}
@@ -126,10 +143,12 @@ export default function CleanerSchedulePage() {
                         </strong>
                       </div>
                     )}
+
                     <div className="col-auto">
                       <small className="text-muted">Location:</small>{' '}
                       <span>{job.location}</span>
                     </div>
+
                     <div className="col-auto">
                       <small className="text-muted">Service:</small>{' '}
                       <span className="text-capitalize">{job.service_type}</span>
@@ -160,6 +179,7 @@ export default function CleanerSchedulePage() {
                         </button>
                       </>
                     )}
+
                     {job.status === 'in_progress' && (
                       <button
                         className="btn btn-sm btn-success"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Navbar from '../components/Navbar';
 import { getAdminUsers, banUser, unbanUser, type AdminUser } from '../api/admin';
 import { getToken } from '../auth/storage';
@@ -14,6 +14,13 @@ const ROLE_COLORS: Record<string, string> = {
   cleaner: 'success',
   administrator: 'dark',
 };
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
 
 export default function AdminUsersPage() {
   const token = getToken();
@@ -32,26 +39,28 @@ export default function AdminUsersPage() {
     if (params.get('role')) setRoleFilter(params.get('role')!);
   }, []);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [roleFilter, bannedFilter]);
-
-  async function fetchUsers() {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
       const params: { role?: string; banned?: string; search?: string } = {};
       if (roleFilter) params.role = roleFilter;
       if (bannedFilter) params.banned = bannedFilter;
       if (search) params.search = search;
+
       const res = await getAdminUsers(token!, params);
       setUsers(res.users);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load users.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load users.'));
     } finally {
       setLoading(false);
     }
-  }
+  }, [roleFilter, bannedFilter, search, token]);
+
+  useEffect(() => {
+    void fetchUsers();
+  }, [fetchUsers]);
 
   async function handleBan(userId: number) {
     try {
@@ -59,24 +68,25 @@ export default function AdminUsersPage() {
       setUsers((prev) => prev.map((u) => (u.id === userId ? res.user : u)));
       setBanningUserId(null);
       setBanReason('');
-    } catch (err: any) {
-      alert(err?.message || 'Failed to ban user.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to ban user.'));
     }
   }
 
   async function handleUnban(userId: number) {
     if (!confirm('Are you sure you want to unban this user?')) return;
+
     try {
       const res = await unbanUser(userId, token!);
       setUsers((prev) => prev.map((u) => (u.id === userId ? res.user : u)));
-    } catch (err: any) {
-      alert(err?.message || 'Failed to unban user.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to unban user.'));
     }
   }
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
-    fetchUsers();
+    void fetchUsers();
   }
 
   return (
@@ -86,7 +96,6 @@ export default function AdminUsersPage() {
         <h1 className="h3 fw-bold mb-1">Manage Users</h1>
         <p className="text-muted mb-4">View and manage registered users on the platform.</p>
 
-        {/* Filters */}
         <div className="d-flex align-items-center gap-3 mb-4 flex-wrap">
           <select
             className="form-select"
@@ -99,6 +108,7 @@ export default function AdminUsersPage() {
             <option value="cleaner">Cleaners</option>
             <option value="administrator">Administrators</option>
           </select>
+
           <select
             className="form-select"
             style={{ maxWidth: 140 }}
@@ -109,6 +119,7 @@ export default function AdminUsersPage() {
             <option value="false">Active</option>
             <option value="true">Banned</option>
           </select>
+
           <form onSubmit={handleSearchSubmit} className="d-flex gap-2" style={{ maxWidth: 300 }}>
             <input
               type="text"
@@ -152,9 +163,11 @@ export default function AdminUsersPage() {
                   {users.map((u) => (
                     <tr key={u.id} className={u.is_banned ? 'table-danger' : ''}>
                       <td className="ps-3 fw-medium">
-                        {u.profile
-                          ? `${u.profile.first_name} ${u.profile.last_name}`
-                          : <span className="text-muted fst-italic">No profile</span>}
+                        {u.profile ? (
+                          `${u.profile.first_name} ${u.profile.last_name}`
+                        ) : (
+                          <span className="text-muted fst-italic">No profile</span>
+                        )}
                       </td>
                       <td>{u.email}</td>
                       <td>
@@ -208,7 +221,10 @@ export default function AdminUsersPage() {
                                 </button>
                                 <button
                                   className="btn btn-sm btn-secondary"
-                                  onClick={() => { setBanningUserId(null); setBanReason(''); }}
+                                  onClick={() => {
+                                    setBanningUserId(null);
+                                    setBanReason('');
+                                  }}
                                 >
                                   Cancel
                                 </button>

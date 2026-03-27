@@ -1,12 +1,23 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, type Location } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { login } from '../api/auth';
 import { setAuth } from '../auth/storage';
 
+type LoginLocationState = {
+  fromRegister?: boolean;
+};
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
-  const location = useLocation() as any;
+  const location = useLocation() as Location<LoginLocationState>;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,7 +25,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fromRegister = location?.state?.fromRegister;
+  const fromRegister = location.state?.fromRegister;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,11 +34,11 @@ export default function LoginPage() {
     try {
       setLoading(true);
       const res = await login({ email: email.trim().toLowerCase(), password });
-      
+
       setAuth(res.token, res.user);
       navigate('/dashboard', { replace: true });
-    } catch (err: any) {
-      setError(err?.message || 'Login failed.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Login failed.'));
     } finally {
       setLoading(false);
     }
