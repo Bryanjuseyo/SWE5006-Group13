@@ -1,7 +1,7 @@
 import pytest
 from datetime import date, datetime, timezone, timedelta
 
-from app.models import db, User, JobRequest, UserRole, JobStatus, ServiceType
+from app.models import db, User, JobRequest, UserRole, JobStatus, ServiceType, UserProfile
 from app.services.admin_service import AdminService
 
 
@@ -199,3 +199,140 @@ def test_ban_user_ignores_deleted_jobs(app):
 
         db.session.refresh(deleted_job)
         assert deleted_job.status == JobStatus.pending
+
+def create_user_profile(user_id, first_name="Test", last_name="User"):
+    profile = UserProfile(
+        user_id=user_id,
+        first_name=first_name,
+        last_name=last_name,
+        phone="91234567",
+        address="123 Test Street",
+        city="Singapore",
+    )
+    db.session.add(profile)
+    db.session.commit()
+    return profile
+
+
+def test_get_all_users_returns_all_users(app):
+    with app.app_context():
+        user1 = create_user("user1@test.com", UserRole.end_user)
+        user2 = create_user("user2@test.com", UserRole.cleaner)
+
+        result = AdminService.get_all_users()
+
+        emails = [u["email"] for u in result["users"]]
+        assert len(result["users"]) == 2
+        assert user1.email in emails
+        assert user2.email in emails
+
+
+def test_get_all_users_filters_by_role(app):
+    with app.app_context():
+        create_user("end@test.com", UserRole.end_user)
+        cleaner = create_user("cleaner@test.com", UserRole.cleaner)
+
+        result = AdminService.get_all_users(role_filter="cleaner")
+
+        assert len(result["users"]) == 1
+        assert result["users"][0]["email"] == cleaner.email
+        assert result["users"][0]["role"] == "cleaner"
+
+
+def test_get_all_users_filters_banned_true(app):
+    with app.app_context():
+        create_user("active@test.com", UserRole.end_user, is_banned=False)
+        banned = create_user("banned@test.com", UserRole.cleaner, is_banned=True)
+
+        result = AdminService.get_all_users(banned_filter="true")
+
+        assert len(result["users"]) == 1
+        assert result["users"][0]["email"] == banned.email
+        assert result["users"][0]["is_banned"] is True
+
+
+def test_get_all_users_filters_banned_false(app):
+    with app.app_context():
+        active = create_user("active@test.com", UserRole.end_user, is_banned=False)
+        create_user("banned@test.com", UserRole.cleaner, is_banned=True)
+
+        result = AdminService.get_all_users(banned_filter="false")
+
+        emails = [u["email"] for u in result["users"]]
+        assert active.email in emails
+        assert "banned@test.com" not in emails
+
+
+def test_get_all_users_filters_by_search(app):
+    with app.app_context():
+        create_user("alice@test.com", UserRole.end_user)
+        bob = create_user("bob@test.com", UserRole.cleaner)
+
+        result = AdminService.get_all_users(search="bob")
+
+        assert len(result["users"]) == 1
+        assert result["users"][0]["email"] == bob.email
+
+
+def test_get_all_users_invalid_role_raises_error(app):
+    with app.app_context():
+        with pytest.raises(ValueError, match=r"invalid_role\|role must be one of:"):
+            AdminService.get_all_users(role_filter="super_admin")
+
+
+def test_get_all_users_includes_profile_when_exists(app):
+    with app.app_context():
+        user = create_user("profile@test.com", UserRole.end_user)
+        create_user_profile(user.id, "John", "Tan")
+
+        result = AdminService.get_all_users(search="profile@test.com")
+
+        assert len(result["users"]) == 1
+        assert result["users"][0]["profile"] is not None
+        assert result["users"][0]["profile"]["first_name"] == "John"
+        assert result["users"][0]["profile"]["last_name"] == "Tan"
+
+
+def test_get_all_users_returns_profile_none_when_missing(app):
+    with app.app_context():
+        user = create_user("noprofile@test.com", UserRole.end_user)
+
+        result = AdminService.get_all_users(search="noprofile@test.com")
+
+        assert len(result["users"]) == 1
+        assert result["users"][0]["email"] == user.email
+        assert result["users"][0]["profile"] is None
+
+
+def test_unban_user_success(app):
+    with app.app_context():
+        user = create_user("banned2@test.com", UserRole.end_user, is_banned=True)
+        user.banned_at = datetime.now(timezone.utc)
+        user.ban_reason = "Bad actor"
+        db.session.commit()
+
+        result = AdminService.unban_user(user.id)
+
+        updated = db.session.get(User, user.id)
+
+        assert result["message"] == "User has been unbanned."
+        assert result["user"]["id"] == user.id
+        assert result["user"]["is_banned"] is False
+
+        assert updated.is_banned is False
+        assert updated.banned_at is None
+        assert updated.ban_reason is None
+
+
+def test_unban_user_not_found(app):
+    with app.app_context():
+        with pytest.raises(ValueError, match=r"not_found\|User not found\."):
+            AdminService.unban_user(999999)
+
+
+def test_unban_user_not_banned(app):
+    with app.app_context():
+        user = create_user("active2@test.com", UserRole.end_user, is_banned=False)
+
+        with pytest.raises(ValueError, match=r"not_banned\|User is not banned\."):
+            AdminService.unban_user(user.id)
