@@ -4,7 +4,7 @@ View job requests - service layer tests.
 import pytest
 from app.services.job_request_service import JobRequestService
 from app.models import JobStatus, ServiceType
-
+from datetime import datetime, timezone, timedelta
 
 def test_view_not_found_raises_error(mocker):
     """Viewing non-existent job request should raise error."""
@@ -39,7 +39,13 @@ def test_cleaner_can_view_unassigned_pending(mocker):
     mock_job_request = mocker.Mock()
     mock_job_request.cleaner_id = None
     mock_job_request.status = JobStatus.pending
-    mock_job_request.to_dict.return_value = {"id": 1, "status": "pending", "cleaner_id": None}
+    mock_job_request.priority_window_end = datetime.now(timezone.utc) + timedelta(hours=1)
+    mock_job_request.deleted_at = None
+    mock_job_request.to_dict.return_value = {
+        "id": 1,
+        "status": "pending",
+        "cleaner_id": None,
+    }
 
     mock_query = mocker.Mock()
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
