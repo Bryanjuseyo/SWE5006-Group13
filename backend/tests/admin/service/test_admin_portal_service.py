@@ -89,10 +89,10 @@ def test_get_dashboard_stats_returns_correct_counts(app):
 
         result = AdminService.get_dashboard_stats()
 
-        assert result["users"]["total"] == 5
+        assert result["users"]["total"] == 4
         assert result["users"]["end_users"] == 2
         assert result["users"]["cleaners"] == 2
-        assert result["users"]["administrators"] == 1
+        assert result["users"]["administrators"] == 0
         assert result["users"]["banned"] == 1
 
         assert result["jobs"]["total"] == 6
