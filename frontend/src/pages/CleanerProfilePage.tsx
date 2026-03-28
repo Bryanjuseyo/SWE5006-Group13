@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import { getCleanerProfile, updateCleanerProfile } from '../api/cleanerProfile';
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function CleanerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,15 +31,15 @@ export default function CleanerProfilePage() {
         setHourlyRate(p.hourly_rate != null ? String(p.hourly_rate) : '');
         setYears(String(p.years_experience ?? 0));
       }
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load cleaner profile.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to load cleaner profile.'));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function onSave(e: React.FormEvent) {
@@ -63,8 +70,8 @@ export default function CleanerProfilePage() {
       });
       setSuccess('Cleaner profile saved.');
       await load();
-    } catch (e: any) {
-      setError(e?.message || 'Failed to save cleaner profile.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to save cleaner profile.'));
     } finally {
       setSaving(false);
     }

@@ -1,3 +1,8 @@
+from app import create_app
+from app.models import db as _db
+import pytest
+import atexit
+from testcontainers.postgres import PostgresContainer as _PostgresContainer
 from auth.test_routes import register_auth_test_routes
 import os
 import sys
@@ -5,9 +10,6 @@ import sys
 # Make backend/ importable from any working directory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from testcontainers.postgres import PostgresContainer as _PostgresContainer  # noqa: E402
-import atexit  # noqa: E402
-import pytest  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Start the test PostgreSQL container BEFORE the app is imported.
@@ -19,9 +21,6 @@ _container = _PostgresContainer("postgres:17-alpine", driver="pg8000")
 _container.start()
 os.environ["DATABASE_URL"] = _container.get_connection_url()
 atexit.register(_container.stop)
-
-from app.models import db as _db  # noqa: E402
-from app import create_app  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -66,19 +65,11 @@ def bearer_header():
 
 @pytest.fixture
 def patch_decode_token(mocker):
-    """
-    Patch app.api.auth.decorators.decode_token because decorators.py imported it directly.
-
-    Usage:
-      patch_decode_token(payload={...})
-      patch_decode_token(exc=ExpiredSignatureError())
-    """
     def _patch(payload=None, exc=None):
         targets = [
             "app.api.auth.decorators.decode_token",
             "app.api.cleaner.routes.decode_token",
         ]
-
         for target in targets:
             if exc is not None:
                 mocker.patch(target, side_effect=exc)

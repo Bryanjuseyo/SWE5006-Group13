@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getToken, getUser } from '../auth/storage';
@@ -6,7 +6,10 @@ import { getAvailableJobs, updateJobStatus, type JobRequest } from '../api/job_r
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString(undefined, {
-    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
   });
 }
 
@@ -18,6 +21,13 @@ function formatTime(t: string | null) {
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function BrowseJobsPage() {
   const token = getToken();
   const currentUser = getUser();
@@ -27,30 +37,31 @@ export default function BrowseJobsPage() {
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState<number | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await getAvailableJobs(token!);
       setJobs(res.job_requests);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load available jobs.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to load available jobs.'));
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function handleAccept(id: number) {
     setAccepting(id);
     try {
       await updateJobStatus(id, 'confirmed', token!);
-      // Remove accepted job from the list and navigate to schedule
       setJobs((prev) => prev.filter((j) => j.id !== id));
       navigate('/cleaner/schedule');
-    } catch (e: any) {
-      alert(e?.message || 'Failed to accept job.');
+    } catch (e: unknown) {
+      alert(getErrorMessage(e, 'Failed to accept job.'));
       setAccepting(null);
     }
   }
@@ -95,9 +106,7 @@ export default function BrowseJobsPage() {
                     <small className="text-muted">#{job.id}</small>
                   </div>
 
-                  {job.description && (
-                    <p className="text-muted small mb-2">{job.description}</p>
-                  )}
+                  {job.description && <p className="text-muted small mb-2">{job.description}</p>}
 
                   <div className="row g-2 mt-1">
                     <div className="col-auto">
