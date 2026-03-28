@@ -24,6 +24,7 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
+      - run: npx vitest --run
       - run: npm run build
 
       - name: Snyk frontend scan
