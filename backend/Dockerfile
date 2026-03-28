@@ -1,9 +1,9 @@
 FROM python:3.12-slim
 
-COPY zscaler-root-ca.crt /usr/local/share/ca-certificates/zscaler-root-ca.crt
-RUN apt-get update && \
-    apt-get install -y ca-certificates && \
-    update-ca-certificates
+#COPY zscaler-root-ca.crt /usr/local/share/ca-certificates/zscaler-root-ca.crt
+#RUN apt-get update && \
+#    apt-get install -y ca-certificates && \
+#    update-ca-certificates
 
 WORKDIR /app
 
