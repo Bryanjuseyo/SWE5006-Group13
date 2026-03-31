@@ -1,0 +1,23 @@
+---
+- name: Deploy CleanMatch to EC2
+  hosts: staging
+  become: true
+
+  tasks:
+    - name: Pull latest code
+      git:
+        repo: https://github.com/Bryanjuseyo/SWE5006-Group13.git
+        dest: /home/ubuntu/SWE5006-Group13
+        version: staging
+        force: yes
+
+    - name: Stop existing containers
+      shell: |
+        cd /home/ubuntu/SWE5006-Group13
+        docker compose --env-file .env.staging -f docker-compose.staging.yml down
+      ignore_errors: yes
+
+    - name: Start containers
+      shell: |
+        cd /home/ubuntu/SWE5006-Group13
+        docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --build
