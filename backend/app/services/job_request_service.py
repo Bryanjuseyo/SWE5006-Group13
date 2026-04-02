@@ -237,8 +237,8 @@ class JobRequestService:
         if job_request.end_user_id != user_id:
             raise ValueError("forbidden|You are not authorized to delete this job request.")
 
-        # Cannot delete in_progress or completed jobs
-        if job_request.status in [JobStatus.in_progress, JobStatus.completed]:
+        # Cannot delete in_progress, cleaner_completed, or completed jobs
+        if job_request.status in [JobStatus.in_progress, JobStatus.cleaner_completed, JobStatus.completed]:
             raise ValueError(
                 "invalid_status|Cannot delete a job request that is in progress or completed."
             )
@@ -371,20 +371,28 @@ class JobRequestService:
 
         current_status = job_request.status
 
-        # End user can only cancel their own requests once a cleaner has been assigned
+        # End user status transitions
         if role == "end_user":
             if job_request.end_user_id != user_id:
                 raise ValueError("forbidden|You are not authorized to update this job request.")
-            if new_status_enum != JobStatus.cancelled:
-                raise ValueError("forbidden|End users can only cancel job requests.")
-            if job_request.cleaner_id is None:
-                raise ValueError(
-                    "forbidden|Cannot cancel a job request that has not been assigned to a cleaner."
-                )
-            if current_status not in [JobStatus.pending, JobStatus.confirmed]:
-                raise ValueError(
-                    "invalid_status|Can only cancel pending or confirmed job requests."
-                )
+
+            if new_status_enum == JobStatus.completed:
+                # End user can confirm completion only after cleaner has marked it done
+                if current_status != JobStatus.cleaner_completed:
+                    raise ValueError(
+                        "invalid_status|Can only confirm completion after the cleaner has marked the job as done."
+                    )
+            elif new_status_enum == JobStatus.cancelled:
+                if job_request.cleaner_id is None:
+                    raise ValueError(
+                        "forbidden|Cannot cancel a job request that has not been assigned to a cleaner."
+                    )
+                if current_status not in [JobStatus.pending, JobStatus.confirmed]:
+                    raise ValueError(
+                        "invalid_status|Can only cancel pending or confirmed job requests."
+                    )
+            else:
+                raise ValueError("forbidden|End users can only cancel or confirm completion of job requests.")
 
         # Cleaner status transitions
         elif role == "cleaner":
@@ -418,7 +426,7 @@ class JobRequestService:
             else:
                 valid_transitions = {
                     JobStatus.confirmed: [JobStatus.in_progress, JobStatus.cancelled],
-                    JobStatus.in_progress: [JobStatus.completed],
+                    JobStatus.in_progress: [JobStatus.cleaner_completed],
                 }
 
                 allowed_statuses = valid_transitions.get(current_status, [])

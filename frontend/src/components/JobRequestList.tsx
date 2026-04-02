@@ -13,6 +13,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   in_progress: 'In Progress',
+  cleaner_completed: 'Awaiting Your Confirmation',
   completed: 'Completed',
   cancelled: 'Cancelled',
   rejected: 'Rejected',
@@ -22,6 +23,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   pending: 'warning',
   confirmed: 'info',
   in_progress: 'primary',
+  cleaner_completed: 'warning',
   completed: 'success',
   cancelled: 'secondary',
   rejected: 'danger',
@@ -117,6 +119,7 @@ export default function JobRequestList() {
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
           <option value="in_progress">In Progress</option>
+          <option value="cleaner_completed">Awaiting Your Confirmation</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
           <option value="rejected">Rejected</option>
@@ -257,6 +260,18 @@ export default function JobRequestList() {
                         </button>
                       )}
 
+                    {isEndUser && job.status === 'cleaner_completed' && (
+                      <button
+                        className="btn btn-sm btn-success"
+                        onClick={() => {
+                          if (confirm('Are you sure you want to confirm this job is completed? This cannot be undone.'))
+                            void handleStatusChange(job.id, 'completed');
+                        }}
+                      >
+                        Confirm Completion
+                      </button>
+                    )}
+
                     {isCleaner && job.status === 'pending' && (
                       <button
                         className="btn btn-sm btn-success"
@@ -286,7 +301,7 @@ export default function JobRequestList() {
                     {isCleaner && job.status === 'in_progress' && (
                       <button
                         className="btn btn-sm btn-success"
-                        onClick={() => handleStatusChange(job.id, 'completed')}
+                        onClick={() => handleStatusChange(job.id, 'cleaner_completed')}
                       >
                         Complete Job
                       </button>

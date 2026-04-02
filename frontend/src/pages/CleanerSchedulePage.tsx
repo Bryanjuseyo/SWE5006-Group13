@@ -7,6 +7,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   in_progress: 'In Progress',
+  cleaner_completed: 'Awaiting End User Confirmation',
   completed: 'Completed',
   cancelled: 'Cancelled',
   rejected: 'Rejected',
@@ -16,6 +17,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   pending: 'warning',
   confirmed: 'info',
   in_progress: 'primary',
+  cleaner_completed: 'warning',
   completed: 'success',
   cancelled: 'secondary',
   rejected: 'danger',
@@ -183,7 +185,7 @@ export default function CleanerSchedulePage() {
                     {job.status === 'in_progress' && (
                       <button
                         className="btn btn-sm btn-success"
-                        onClick={() => handleStatusChange(job.id, 'completed')}
+                        onClick={() => handleStatusChange(job.id, 'cleaner_completed')}
                       >
                         Mark Complete
                       </button>

@@ -29,6 +29,7 @@ class JobStatus(enum.Enum):
     pending = 'pending'
     confirmed = 'confirmed'
     in_progress = 'in_progress'
+    cleaner_completed = 'cleaner_completed'
     completed = 'completed'
     cancelled = 'cancelled'
     rejected = 'rejected'
@@ -57,6 +58,9 @@ class User(db.Model, UserMixin):
     failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
     locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
     last_login_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    two_factor_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    two_factor_otp = db.Column(db.String(255), nullable=True)
+    two_factor_otp_expires = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
     profile = db.relationship('UserProfile', backref='user', uselist=False, cascade='all, delete-orphan')
@@ -78,6 +82,7 @@ class User(db.Model, UserMixin):
             'ban_reason': self.ban_reason,
             'created_at': self.created_at.isoformat(),
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
+            'two_factor_enabled': self.two_factor_enabled,
         }
 
 # =============================================

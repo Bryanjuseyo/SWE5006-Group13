@@ -4,7 +4,7 @@ import { apiRequest } from './client';
 // TYPES
 // =============================================
 
-export type JobStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
+export type JobStatus = 'pending' | 'confirmed' | 'in_progress' | 'cleaner_completed' | 'completed' | 'cancelled' | 'rejected';
 export type ServiceType = 'partial' | 'full';
 
 export type JobRequest = {

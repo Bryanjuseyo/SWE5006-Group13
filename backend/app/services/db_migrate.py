@@ -10,6 +10,8 @@ def apply_migrations(db):
     _add_user_ban_columns(db)
     _add_rejected_job_status(db)
     _add_priority_window_column(db)
+    _add_cleaner_completed_job_status(db)
+    _add_two_factor_columns(db)
 
 
 def _add_user_ban_columns(db):
@@ -50,6 +52,24 @@ def _add_user_ban_columns(db):
     db.session.commit()
 
 
+def _add_cleaner_completed_job_status(db):
+    """Add 'cleaner_completed' value to the jobstatus enum type."""
+    conn = db.session.connection()
+
+    result = conn.execute(text(
+        "SELECT enumlabel FROM pg_enum "
+        "JOIN pg_type ON pg_enum.enumtypid = pg_type.oid "
+        "WHERE pg_type.typname = 'jobstatus' AND pg_enum.enumlabel = 'cleaner_completed'"
+    ))
+    if result.fetchone() is None:
+        conn.execute(text(
+            "ALTER TYPE jobstatus ADD VALUE 'cleaner_completed'"
+        ))
+        print("Migration: added 'cleaner_completed' to jobstatus enum")
+
+    db.session.commit()
+
+
 def _add_priority_window_column(db):
     """Add priority_window_end column to job_requests table."""
     conn = db.session.connection()
@@ -63,6 +83,43 @@ def _add_priority_window_column(db):
             "ALTER TABLE job_requests ADD COLUMN priority_window_end TIMESTAMPTZ"
         ))
         print("Migration: added priority_window_end column to job_requests table")
+
+    db.session.commit()
+
+
+def _add_two_factor_columns(db):
+    """Add two_factor_enabled, two_factor_otp, two_factor_otp_expires columns to users table."""
+    conn = db.session.connection()
+
+    result = conn.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'users' AND column_name = 'two_factor_enabled'"
+    ))
+    if result.fetchone() is None:
+        conn.execute(text(
+            "ALTER TABLE users ADD COLUMN two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+        print("Migration: added two_factor_enabled column to users table")
+
+    result = conn.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'users' AND column_name = 'two_factor_otp'"
+    ))
+    if result.fetchone() is None:
+        conn.execute(text(
+            "ALTER TABLE users ADD COLUMN two_factor_otp VARCHAR(255)"
+        ))
+        print("Migration: added two_factor_otp column to users table")
+
+    result = conn.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'users' AND column_name = 'two_factor_otp_expires'"
+    ))
+    if result.fetchone() is None:
+        conn.execute(text(
+            "ALTER TABLE users ADD COLUMN two_factor_otp_expires TIMESTAMPTZ"
+        ))
+        print("Migration: added two_factor_otp_expires column to users table")
 
     db.session.commit()
 
