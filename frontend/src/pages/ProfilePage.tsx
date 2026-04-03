@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getMyProfile, updateMyProfile } from '../api/profile';
 
@@ -115,6 +116,16 @@ export default function ProfilePage() {
                   <div className="fw-semibold">{new Date(createdAt).toLocaleDateString()}</div>
                 </div>
               </div>
+            </div>
+
+            <div className="card p-4 shadow-sm mb-4 d-flex flex-row align-items-center justify-content-between">
+              <div>
+                <div className="fw-semibold">Two-Factor Authentication</div>
+                <div className="text-muted small">Add an extra layer of security to your account.</div>
+              </div>
+              <Link to="/profile/2fa" className="btn btn-outline-primary btn-sm">
+                Manage 2FA
+              </Link>
             </div>
 
             <form onSubmit={onSave} className="card p-4 shadow-sm">

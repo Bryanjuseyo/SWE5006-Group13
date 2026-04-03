@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   in_progress: 'In Progress',
+  cleaner_completed: 'Awaiting Your Confirmation',
   completed: 'Completed',
   cancelled: 'Cancelled',
   rejected: 'Rejected',
@@ -23,6 +24,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'warning',
   confirmed: 'info',
   in_progress: 'primary',
+  cleaner_completed: 'warning',
   completed: 'success',
   cancelled: 'secondary',
   rejected: 'danger',
@@ -88,6 +90,8 @@ export default function JobRequestDetailPage() {
     const confirmMsg =
       newStatus === 'cancelled'
         ? 'Are you sure you want to cancel this job request?'
+        : newStatus === 'completed' && user?.role === 'end_user'
+        ? 'Are you sure you want to confirm this job is completed? This cannot be undone.'
         : `Change status to ${STATUS_LABELS[newStatus]}?`;
 
     if (!confirm(confirmMsg)) return;
@@ -243,6 +247,15 @@ export default function JobRequestDetailPage() {
                 </>
               )}
 
+              {isEndUser && jobRequest.status === 'cleaner_completed' && (
+                <button
+                  className="btn btn-success"
+                  onClick={() => handleStatusChange('completed')}
+                >
+                  Confirm Completion
+                </button>
+              )}
+
               {isEndUser &&
                 jobRequest.cleaner_id !== null &&
                 ['pending', 'confirmed'].includes(jobRequest.status) && (
@@ -291,7 +304,7 @@ export default function JobRequestDetailPage() {
               {isCleaner && jobRequest.status === 'in_progress' && (
                 <button
                   className="btn btn-success"
-                  onClick={() => handleStatusChange('completed')}
+                  onClick={() => handleStatusChange('cleaner_completed')}
                 >
                   Mark as Completed
                 </button>
