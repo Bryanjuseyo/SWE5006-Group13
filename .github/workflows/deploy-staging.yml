@@ -57,9 +57,11 @@ jobs:
         run: pip install ansible
 
       - name: Set up SSH key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/cleanmatch-key.pem
+          echo "$EC2_SSH_KEY" > ~/.ssh/cleanmatch-key.pem
           chmod 600 ~/.ssh/cleanmatch-key.pem
 
       - name: Run Ansible playbook
