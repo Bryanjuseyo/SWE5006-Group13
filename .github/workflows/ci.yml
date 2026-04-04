@@ -24,7 +24,10 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
-      - run: npm run build
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -74,4 +77,5 @@ jobs:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
           FLASK_ENV: testing
           PYTHONPATH: .
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: pytest
