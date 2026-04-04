@@ -24,10 +24,18 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
+      - run: npx vitest --run
       - name: Build
         run: npm run build
         env:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+
+      - name: Snyk frontend scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=frontend/package-lock.json
 
       - uses: actions/upload-artifact@v4
         with:
@@ -71,6 +79,13 @@ jobs:
         run: |
           pip install flake8
           flake8 . --max-line-length=120
+
+      - name: Snyk backend scan
+        uses: snyk/actions/python@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=backend/requirements.txt --skip-unresolved
 
       - name: Run tests
         env:
