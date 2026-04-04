@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getMyProfile, updateMyProfile } from '../api/profile';
 
 function isValidPhone(phone: string) {
   return /^[89]\d{7}$/.test(phone);
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
 }
 
 export default function ProfilePage() {
@@ -37,15 +45,15 @@ export default function ProfilePage() {
       setPhone(p?.phone ?? '');
       setAddress(p?.address ?? '');
       setCity(p?.city ?? '');
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load profile.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to load profile.'));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function onSave(e: React.FormEvent) {
@@ -73,8 +81,8 @@ export default function ProfilePage() {
       });
       setSuccess('Profile saved.');
       await load();
-    } catch (e: any) {
-      setError(e?.message || 'Failed to save profile.');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to save profile.'));
     } finally {
       setSaving(false);
     }
@@ -110,32 +118,65 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            <div className="card p-4 shadow-sm mb-4 d-flex flex-row align-items-center justify-content-between">
+              <div>
+                <div className="fw-semibold">Two-Factor Authentication</div>
+                <div className="text-muted small">Add an extra layer of security to your account.</div>
+              </div>
+              <Link to="/profile/2fa" className="btn btn-outline-primary btn-sm">
+                Manage 2FA
+              </Link>
+            </div>
+
             <form onSubmit={onSave} className="card p-4 shadow-sm">
               <div className="row g-3">
                 <div className="col-md-6">
                   <label className="form-label">First Name</label>
-                  <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  <input
+                    className="form-control"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
                 </div>
 
                 <div className="col-md-6">
                   <label className="form-label">Last Name</label>
-                  <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  <input
+                    className="form-control"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
                 </div>
 
                 <div className="col-md-6">
                   <label className="form-label">Phone</label>
-                  <input className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 91234567" />
+                  <input
+                    className="form-control"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. 91234567"
+                  />
                   <div className="form-text">8 digits, starts with 8 or 9</div>
                 </div>
 
                 <div className="col-md-6">
                   <label className="form-label">City</label>
-                  <input className="form-control" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Singapore" />
+                  <input
+                    className="form-control"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="e.g. Singapore"
+                  />
                 </div>
 
                 <div className="col-12">
                   <label className="form-label">Address</label>
-                  <textarea className="form-control" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} />
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                  />
                 </div>
               </div>
 

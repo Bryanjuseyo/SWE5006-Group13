@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getAdminBookings, rejectBooking } from '../api/admin';
@@ -23,6 +23,13 @@ const STATUS_COLORS: Record<string, string> = {
   rejected: 'danger',
 };
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function AdminBookingsPage() {
   const token = getToken();
   const [bookings, setBookings] = useState<JobRequest[]>([]);
@@ -33,42 +40,48 @@ export default function AdminBookingsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('status')) setStatusFilter(params.get('status')!);
+    const status = params.get('status');
+    if (status) setStatusFilter(status);
   }, []);
 
-  useEffect(() => {
-    fetchBookings();
-  }, [statusFilter]);
-
-  async function fetchBookings() {
+  const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
       const params: { status?: string; search?: string } = {};
       if (statusFilter) params.status = statusFilter;
       if (search) params.search = search;
+
       const res = await getAdminBookings(token!, params);
       setBookings(res.job_requests);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load bookings.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load bookings.'));
     } finally {
       setLoading(false);
     }
-  }
+  }, [statusFilter, search, token]);
+
+  useEffect(() => {
+    void fetchBookings();
+  }, [fetchBookings]);
 
   async function handleReject(id: number) {
-    if (!confirm('Are you sure you want to reject this booking? This action marks it as suspicious.')) return;
+    if (!confirm('Are you sure you want to reject this booking? This action marks it as suspicious.')) {
+      return;
+    }
+
     try {
       const res = await rejectBooking(id, token!);
       setBookings((prev) => prev.map((b) => (b.id === id ? res.job_request : b)));
-    } catch (err: any) {
-      alert(err?.message || 'Failed to reject booking.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to reject booking.'));
     }
   }
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
-    fetchBookings();
+    void fetchBookings();
   }
 
   return (
@@ -78,7 +91,6 @@ export default function AdminBookingsPage() {
         <h1 className="h3 fw-bold mb-1">Manage Bookings</h1>
         <p className="text-muted mb-4">View and manage all jobs and bookings on the platform.</p>
 
-        {/* Filters */}
         <div className="d-flex align-items-center gap-3 mb-4 flex-wrap">
           <select
             className="form-select"
@@ -94,6 +106,7 @@ export default function AdminBookingsPage() {
             <option value="cancelled">Cancelled</option>
             <option value="rejected">Rejected</option>
           </select>
+
           <form onSubmit={handleSearchSubmit} className="d-flex gap-2" style={{ maxWidth: 300 }}>
             <input
               type="text"
@@ -143,32 +156,36 @@ export default function AdminBookingsPage() {
                   {bookings.map((b) => (
                     <tr key={b.id} className={b.status === 'rejected' ? 'table-danger' : ''}>
                       <td className="ps-3 text-muted">#{b.id}</td>
-                      <td className="fw-medium">
-                        {b.title}
-                      </td>
+                      <td className="fw-medium">{b.title}</td>
                       <td className="text-muted">{b.end_user?.email || `User #${b.end_user_id}`}</td>
                       <td className="text-capitalize">{b.service_type || '-'}</td>
-                      <td className="text-muted">{b.cleaner?.email || <span className="fst-italic">Unassigned</span>}</td>
+                      <td className="text-muted">
+                        {b.cleaner?.email || <span className="fst-italic">Unassigned</span>}
+                      </td>
                       <td>
                         <span className={`badge bg-${STATUS_COLORS[b.status] || 'secondary'}`}>
                           {STATUS_LABELS[b.status] || b.status}
                         </span>
                       </td>
                       <td className="text-muted small">{b.preferred_date || '-'}</td>
-                      <td className="text-muted small">{new Date(b.created_at).toLocaleDateString()}</td>
+                      <td className="text-muted small">
+                        {new Date(b.created_at).toLocaleDateString()}
+                      </td>
                       <td className="pe-3">
                         <div className="d-flex gap-1">
                           <Link to={`/job-requests/${b.id}`} className="btn btn-sm btn-outline-dark">
                             View
                           </Link>
-                          {b.status !== 'completed' && b.status !== 'rejected' && b.status !== 'cancelled' && (
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() => handleReject(b.id)}
-                            >
-                              Reject
-                            </button>
-                          )}
+                          {b.status !== 'completed' &&
+                            b.status !== 'rejected' &&
+                            b.status !== 'cancelled' && (
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => handleReject(b.id)}
+                              >
+                                Reject
+                              </button>
+                            )}
                         </div>
                       </td>
                     </tr>

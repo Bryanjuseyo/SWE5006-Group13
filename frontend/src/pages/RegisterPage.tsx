@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { register, type UserRole } from '../api/auth';
-import { updateMyProfile } from '../api/profile';
-import { updateCleanerProfile } from '../api/cleanerProfile';
+import { register, verify2FA, type UserRole } from '../api/auth';
 import { setAuth } from '../auth/storage';
 
 function isValidEmail(email: string) {
@@ -17,6 +15,13 @@ function isValidPassword(pw: string) {
 
 function isValidPhone(phone: string) {
   return /^[89]\d{7}$/.test(phone);
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
 }
 
 export default function RegisterPage() {
@@ -45,7 +50,11 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onStep1Submit(e: React.FormEvent) {
+  // OTP verification step (after account creation)
+  const [tempToken, setTempToken] = useState<string | null>(null);
+  const [otp, setOtp] = useState('');
+
+  function onStep1Submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -60,19 +69,10 @@ export default function RegisterPage() {
       return;
     }
 
-    try {
-      setLoading(true);
-      const res = await register({ email: eTrim, password, role });
-      setAuth(res.token, res.user);
-      setStep(2);
-    } catch (err: any) {
-      setError(err?.message || 'Registration failed.');
-    } finally {
-      setLoading(false);
-    }
+    setStep(2);
   }
 
-  async function onStep2Submit(e: React.FormEvent) {
+  function onStep2Submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -85,24 +85,10 @@ export default function RegisterPage() {
       return;
     }
 
-    try {
-      setLoading(true);
-      await updateMyProfile({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        phone: phone || undefined,
-        address: address.trim() || undefined,
-        city: city.trim() || undefined,
-      });
-      if (role === 'cleaner') {
-        setStep(3);
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to save profile.');
-    } finally {
-      setLoading(false);
+    if (role === 'cleaner') {
+      setStep(3);
+    } else {
+      submitRegistration();
     }
   }
 
@@ -125,19 +111,89 @@ export default function RegisterPage() {
       }
     }
 
+    submitRegistration(rateNum, yearsInt);
+  }
+
+  async function submitRegistration(rateNum?: number | null, yearsInt?: number) {
     try {
       setLoading(true);
-      await updateCleanerProfile({
-        service_type: serviceType,
-        hourly_rate: rateNum,
-        years_experience: yearsInt,
+      const res = await register({
+        email: email.trim().toLowerCase(),
+        password,
+        role,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone: phone || undefined,
+        address: address.trim() || undefined,
+        city: city.trim() || undefined,
+        ...(role === 'cleaner' && {
+          service_type: serviceType,
+          hourly_rate: rateNum !== undefined ? rateNum : null,
+          years_experience: yearsInt !== undefined ? yearsInt : 0,
+        }),
       });
-      navigate('/dashboard', { replace: true });
-    } catch (err: any) {
-      setError(err?.message || 'Failed to save cleaner profile.');
+      setTempToken(res.temp_token);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Registration failed.'));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function onOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      setLoading(true);
+      const res = await verify2FA(otp.trim(), tempToken!);
+      setAuth(res.token, res.user);
+      navigate('/dashboard', { replace: true });
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Verification failed. Please check the code and try again.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (tempToken !== null) {
+    return (
+      <>
+        <Navbar />
+        <main className="container py-5" style={{ maxWidth: 520 }}>
+          <h1 className="h3 fw-bold mb-1">Verify your email</h1>
+          <p className="text-muted mb-4">
+            A 6-digit verification code has been sent to <strong>{email.trim().toLowerCase()}</strong>.
+            Enter it below to complete your registration.
+          </p>
+
+          {error && <div className="alert alert-danger">{error}</div>}
+
+          <form onSubmit={onOtpSubmit} className="card p-4 shadow-sm">
+            <div className="mb-4">
+              <label className="form-label">Verification Code</label>
+              <input
+                className="form-control form-control-lg text-center"
+                type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="000000"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+              />
+              <div className="form-text">Enter the 6-digit code from your email. It expires in 5 minutes.</div>
+            </div>
+
+            <button className="btn btn-success w-100" disabled={loading}>
+              {loading ? 'Verifying...' : 'Complete registration'}
+            </button>
+          </form>
+        </main>
+      </>
+    );
   }
 
   return (
@@ -146,22 +202,31 @@ export default function RegisterPage() {
       <main className="container py-5" style={{ maxWidth: 520 }}>
         <h1 className="h3 fw-bold mb-1">Create an account</h1>
 
-        {/* Step indicator */}
         <div className="d-flex align-items-center gap-2 mb-4">
           <span className={`badge rounded-pill ${step === 1 ? 'bg-primary' : 'bg-success'}`}>
-            {step === 1 ? '1' : '✓'}
+            {step === 1 ? '1' : '\u2713'}
           </span>
           <span className={step === 1 ? 'fw-semibold' : 'text-muted'}>Account info</span>
-          <span className="text-muted mx-1">→</span>
-          <span className={`badge rounded-pill ${step === 2 ? 'bg-primary' : step > 2 ? 'bg-success' : 'bg-secondary'}`}>
-            {step > 2 ? '✓' : '2'}
+          <span className="text-muted mx-1">&rarr;</span>
+          <span
+            className={`badge rounded-pill ${step === 2 ? 'bg-primary' : step > 2 ? 'bg-success' : 'bg-secondary'
+              }`}
+          >
+            {step > 2 ? '\u2713' : '2'}
           </span>
           <span className={step === 2 ? 'fw-semibold' : 'text-muted'}>Your profile</span>
           {(role === 'cleaner' || step === 3) && (
             <>
-              <span className="text-muted mx-1">→</span>
-              <span className={`badge rounded-pill ${step === 3 ? 'bg-primary' : 'bg-secondary'}`}>3</span>
-              <span className={step === 3 ? 'fw-semibold' : 'text-muted'}>Cleaner details</span>
+              <span className="text-muted mx-1">&rarr;</span>
+              <span
+                className={`badge rounded-pill ${step === 3 ? 'bg-primary' : 'bg-secondary'
+                  }`}
+              >
+                3
+              </span>
+              <span className={step === 3 ? 'fw-semibold' : 'text-muted'}>
+                Cleaner details
+              </span>
             </>
           )}
         </div>
@@ -213,7 +278,7 @@ export default function RegisterPage() {
             </div>
 
             <button className="btn btn-primary w-100" disabled={loading}>
-              {loading ? 'Creating account...' : 'Next: Create profile'}
+              Next: Your profile
             </button>
 
             <div className="text-center mt-3">
@@ -225,11 +290,15 @@ export default function RegisterPage() {
 
         {step === 2 && (
           <form onSubmit={onStep2Submit} className="card p-4 shadow-sm">
-            <p className="text-muted mb-3">Tell us a bit about yourself to complete your account setup.</p>
+            <p className="text-muted mb-3">
+              Tell us a bit about yourself to complete your account setup.
+            </p>
 
             <div className="row g-3 mb-3">
               <div className="col-6">
-                <label className="form-label">First name <span className="text-danger">*</span></label>
+                <label className="form-label">
+                  First name <span className="text-danger">*</span>
+                </label>
                 <input
                   className="form-control"
                   type="text"
@@ -240,7 +309,9 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="col-6">
-                <label className="form-label">Last name <span className="text-danger">*</span></label>
+                <label className="form-label">
+                  Last name <span className="text-danger">*</span>
+                </label>
                 <input
                   className="form-control"
                   type="text"
@@ -253,7 +324,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Phone <span className="text-muted">(optional)</span></label>
+              <label className="form-label">
+                Phone <span className="text-muted">(optional)</span>
+              </label>
               <input
                 className="form-control"
                 type="tel"
@@ -264,7 +337,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Address <span className="text-muted">(optional)</span></label>
+              <label className="form-label">
+                Address <span className="text-muted">(optional)</span>
+              </label>
               <input
                 className="form-control"
                 type="text"
@@ -275,7 +350,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="mb-4">
-              <label className="form-label">City <span className="text-muted">(optional)</span></label>
+              <label className="form-label">
+                City <span className="text-muted">(optional)</span>
+              </label>
               <input
                 className="form-control"
                 type="text"
@@ -286,17 +363,25 @@ export default function RegisterPage() {
             </div>
 
             <button className="btn btn-success w-100" disabled={loading}>
-              {loading ? 'Saving profile...' : role === 'cleaner' ? 'Next: Cleaner details' : 'Complete registration'}
+              {loading
+                ? 'Creating account...'
+                : role === 'cleaner'
+                  ? 'Next: Cleaner details'
+                  : 'Complete registration'}
             </button>
           </form>
         )}
 
         {step === 3 && (
           <form onSubmit={onStep3Submit} className="card p-4 shadow-sm">
-            <p className="text-muted mb-3">Set up your cleaner profile so end users can find and book you.</p>
+            <p className="text-muted mb-3">
+              Set up your cleaner profile so end users can find and book you.
+            </p>
 
             <div className="mb-3">
-              <label className="form-label">Service Type <span className="text-danger">*</span></label>
+              <label className="form-label">
+                Service Type <span className="text-danger">*</span>
+              </label>
               <select
                 className="form-select"
                 value={serviceType}
@@ -309,7 +394,9 @@ export default function RegisterPage() {
 
             <div className="row g-3 mb-4">
               <div className="col-md-6">
-                <label className="form-label">Hourly Rate (SGD) <span className="text-muted">(optional)</span></label>
+                <label className="form-label">
+                  Hourly Rate (SGD) <span className="text-muted">(optional)</span>
+                </label>
                 <input
                   className="form-control"
                   type="number"
@@ -321,7 +408,9 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="col-md-6">
-                <label className="form-label">Years of Experience <span className="text-danger">*</span></label>
+                <label className="form-label">
+                  Years of Experience <span className="text-danger">*</span>
+                </label>
                 <input
                   className="form-control"
                   type="number"
@@ -334,7 +423,7 @@ export default function RegisterPage() {
             </div>
 
             <button className="btn btn-success w-100" disabled={loading}>
-              {loading ? 'Saving...' : 'Complete registration'}
+              {loading ? 'Creating account...' : 'Complete registration'}
             </button>
           </form>
         )}

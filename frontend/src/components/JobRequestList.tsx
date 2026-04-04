@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getJobRequests,
@@ -13,6 +13,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   in_progress: 'In Progress',
+  cleaner_completed: 'Awaiting Your Confirmation',
   completed: 'Completed',
   cancelled: 'Cancelled',
   rejected: 'Rejected',
@@ -22,10 +23,18 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   pending: 'warning',
   confirmed: 'info',
   in_progress: 'primary',
+  cleaner_completed: 'warning',
   completed: 'success',
   cancelled: 'secondary',
   rejected: 'danger',
 };
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
 
 export default function JobRequestList() {
   const token = getToken();
@@ -39,40 +48,42 @@ export default function JobRequestList() {
   const isEndUser = user?.role === 'end_user';
   const isCleaner = user?.role === 'cleaner';
 
-  useEffect(() => {
-    fetchJobRequests();
-  }, [statusFilter]);
-
-  async function fetchJobRequests() {
+  const fetchJobRequests = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getJobRequests(token!, statusFilter || undefined);
       setJobRequests(res.job_requests);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load job requests.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load job requests.'));
     } finally {
       setLoading(false);
     }
-  }
+  }, [token, statusFilter]);
+
+  useEffect(() => {
+    void fetchJobRequests();
+  }, [fetchJobRequests]);
 
   async function handleDelete(id: number) {
     if (!confirm('Are you sure you want to delete this job request?')) return;
+
     try {
       await deleteJobRequest(id, token!);
       setJobRequests((prev) => prev.filter((j) => j.id !== id));
-    } catch (err: any) {
-      alert(err?.message || 'Failed to delete job request.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to delete job request.'));
     }
   }
 
   async function handleCancel(id: number) {
     if (!confirm('Are you sure you want to cancel this job request?')) return;
+
     try {
       const res = await updateJobStatus(id, 'cancelled', token!);
       setJobRequests((prev) => prev.map((j) => (j.id === id ? res.job_request : j)));
-    } catch (err: any) {
-      alert(err?.message || 'Failed to cancel job request.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to cancel job request.'));
     }
   }
 
@@ -80,8 +91,8 @@ export default function JobRequestList() {
     try {
       const res = await updateJobStatus(id, newStatus, token!);
       setJobRequests((prev) => prev.map((j) => (j.id === id ? res.job_request : j)));
-    } catch (err: any) {
-      alert(err?.message || 'Failed to update status.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to update status.'));
     }
   }
 
@@ -108,6 +119,7 @@ export default function JobRequestList() {
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
           <option value="in_progress">In Progress</option>
+          <option value="cleaner_completed">Awaiting Your Confirmation</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
           <option value="rejected">Rejected</option>
@@ -125,12 +137,15 @@ export default function JobRequestList() {
       ) : jobRequests.length === 0 ? (
         <div className="alert alert-info">
           {statusFilter ? (
-            `No job requests with status "${STATUS_LABELS[statusFilter as JobStatus]}" found.`
+            `No job requests with status "${STATUS_LABELS[statusFilter]}" found.`
           ) : (
             <>
               No job requests found.
               {isEndUser && (
-                <> <Link to="/job-requests/new">Create your first job request</Link>.</>
+                <>
+                  {' '}
+                  <Link to="/job-requests/new">Create your first job request</Link>.
+                </>
               )}
             </>
           )}
@@ -196,13 +211,16 @@ export default function JobRequestList() {
                           Priority window - awaiting response
                         </span>
                       )}
-                      {job.status === 'pending' && !job.is_in_priority_window && job.priority_window_end && (
-                        <span className="badge bg-warning text-dark ms-2">
-                          Open to all cleaners
-                        </span>
-                      )}
+                      {job.status === 'pending' &&
+                        !job.is_in_priority_window &&
+                        job.priority_window_end && (
+                          <span className="badge bg-warning text-dark ms-2">
+                            Open to all cleaners
+                          </span>
+                        )}
                     </div>
                   )}
+
                   {job.status === 'pending' && !job.cleaner_id && (
                     <div className="mt-2">
                       <span className="badge bg-secondary">Open to all cleaners</span>
@@ -242,6 +260,18 @@ export default function JobRequestList() {
                         </button>
                       )}
 
+                    {isEndUser && job.status === 'cleaner_completed' && (
+                      <button
+                        className="btn btn-sm btn-success"
+                        onClick={() => {
+                          if (confirm('Are you sure you want to confirm this job is completed? This cannot be undone.'))
+                            void handleStatusChange(job.id, 'completed');
+                        }}
+                      >
+                        Confirm Completion
+                      </button>
+                    )}
+
                     {isCleaner && job.status === 'pending' && (
                       <button
                         className="btn btn-sm btn-success"
@@ -271,13 +301,14 @@ export default function JobRequestList() {
                     {isCleaner && job.status === 'in_progress' && (
                       <button
                         className="btn btn-sm btn-success"
-                        onClick={() => handleStatusChange(job.id, 'completed')}
+                        onClick={() => handleStatusChange(job.id, 'cleaner_completed')}
                       >
                         Complete Job
                       </button>
                     )}
                   </div>
                 </div>
+
                 <div className="card-footer text-muted small">
                   Created: {new Date(job.created_at).toLocaleString()}
                 </div>

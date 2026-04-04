@@ -3,6 +3,13 @@ import Navbar from '../components/Navbar';
 import { listCleaners } from '../api/cleaners';
 import type { CleanerListItem } from '../api/cleaners';
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function ViewCleanersPage() {
   const [cleaners, setCleaners] = useState<CleanerListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,8 +24,8 @@ export default function ViewCleanersPage() {
         setError(null);
         const res = await listCleaners();
         if (mounted) setCleaners(res.cleaners);
-      } catch (e: any) {
-        if (mounted) setError(e?.message || 'Failed to load cleaners');
+      } catch (e: unknown) {
+        if (mounted) setError(getErrorMessage(e, 'Failed to load cleaners'));
       } finally {
         if (mounted) setLoading(false);
       }

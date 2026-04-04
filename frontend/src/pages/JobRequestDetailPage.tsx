@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   in_progress: 'In Progress',
+  cleaner_completed: 'Awaiting Your Confirmation',
   completed: 'Completed',
   cancelled: 'Cancelled',
   rejected: 'Rejected',
@@ -23,10 +24,18 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'warning',
   confirmed: 'info',
   in_progress: 'primary',
+  cleaner_completed: 'warning',
   completed: 'success',
   cancelled: 'secondary',
   rejected: 'danger',
 };
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
 
 export default function JobRequestDetailPage() {
   const navigate = useNavigate();
@@ -39,26 +48,32 @@ export default function JobRequestDetailPage() {
   const token = getToken();
   const user = getUser();
 
-  useEffect(() => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-    fetchJobRequest();
-  }, [token, id]);
+  const isEndUser = user?.role === 'end_user';
+  const isCleaner = user?.role === 'cleaner';
+  const isAdmin = user?.role === 'administrator';
+  const backTo = isAdmin ? '/admin/bookings' : '/job-requests';
+  const backLabel = isAdmin ? 'Back to Manage Bookings' : 'Back to List';
 
-  async function fetchJobRequest() {
+  const fetchJobRequest = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getJobRequest(Number(id), token!);
       setJobRequest(res.job_request);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load job request.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load job request.'));
     } finally {
       setLoading(false);
     }
-  }
+  }, [id, token]);
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    void fetchJobRequest();
+  }, [token, navigate, fetchJobRequest]);
 
   async function handleDelete() {
     if (!confirm('Are you sure you want to delete this job request?')) return;
@@ -66,8 +81,8 @@ export default function JobRequestDetailPage() {
     try {
       await deleteJobRequest(Number(id), token!);
       navigate(backTo, { replace: true });
-    } catch (err: any) {
-      alert(err?.message || 'Failed to delete job request.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to delete job request.'));
     }
   }
 
@@ -75,6 +90,8 @@ export default function JobRequestDetailPage() {
     const confirmMsg =
       newStatus === 'cancelled'
         ? 'Are you sure you want to cancel this job request?'
+        : newStatus === 'completed' && user?.role === 'end_user'
+        ? 'Are you sure you want to confirm this job is completed? This cannot be undone.'
         : `Change status to ${STATUS_LABELS[newStatus]}?`;
 
     if (!confirm(confirmMsg)) return;
@@ -82,16 +99,10 @@ export default function JobRequestDetailPage() {
     try {
       const res = await updateJobStatus(Number(id), newStatus, token!);
       setJobRequest(res.job_request);
-    } catch (err: any) {
-      alert(err?.message || 'Failed to update status.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to update status.'));
     }
   }
-
-  const isEndUser = user?.role === 'end_user';
-  const isCleaner = user?.role === 'cleaner';
-  const isAdmin = user?.role === 'administrator';
-  const backTo = isAdmin ? '/admin/bookings' : '/job-requests';
-  const backLabel = isAdmin ? 'Back to Manage Bookings' : 'Back to List';
 
   if (loading) {
     return (
@@ -188,9 +199,8 @@ export default function JobRequestDetailPage() {
                 <h6 className="text-muted">
                   {jobRequest.status === 'pending' ? 'Preferred Cleaner' : 'Assigned Cleaner'}
                 </h6>
-                <p className="mb-0">
-                  {jobRequest.cleaner?.email || 'Not assigned'}
-                </p>
+                <p className="mb-0">{jobRequest.cleaner?.email || 'Not assigned'}</p>
+
                 {jobRequest.status === 'pending' && jobRequest.is_in_priority_window && (
                   <div className="mt-1">
                     <span className="badge bg-info">Priority window active</span>
@@ -199,11 +209,18 @@ export default function JobRequestDetailPage() {
                     </small>
                   </div>
                 )}
-                {jobRequest.status === 'pending' && jobRequest.cleaner_id && !jobRequest.is_in_priority_window && jobRequest.priority_window_end && (
-                  <div className="mt-1">
-                    <span className="badge bg-warning text-dark">Priority window expired - Open to all cleaners</span>
-                  </div>
-                )}
+
+                {jobRequest.status === 'pending' &&
+                  jobRequest.cleaner_id &&
+                  !jobRequest.is_in_priority_window &&
+                  jobRequest.priority_window_end && (
+                    <div className="mt-1">
+                      <span className="badge bg-warning text-dark">
+                        Priority window expired - Open to all cleaners
+                      </span>
+                    </div>
+                  )}
+
                 {jobRequest.status === 'pending' && !jobRequest.cleaner_id && (
                   <div className="mt-1">
                     <span className="badge bg-secondary">Open to all cleaners</span>
@@ -211,7 +228,6 @@ export default function JobRequestDetailPage() {
                 )}
               </div>
             </div>
-
           </div>
 
           <div className="card-footer">
@@ -222,10 +238,7 @@ export default function JobRequestDetailPage() {
 
               {isEndUser && jobRequest.status === 'pending' && (
                 <>
-                  <Link
-                    to={`/job-requests/${jobRequest.id}/edit`}
-                    className="btn btn-primary"
-                  >
+                  <Link to={`/job-requests/${jobRequest.id}/edit`} className="btn btn-primary">
                     Edit
                   </Link>
                   <button className="btn btn-danger" onClick={handleDelete}>
@@ -234,14 +247,25 @@ export default function JobRequestDetailPage() {
                 </>
               )}
 
-              {isEndUser && jobRequest.cleaner_id !== null && ['pending', 'confirmed'].includes(jobRequest.status) && (
+              {isEndUser && jobRequest.status === 'cleaner_completed' && (
                 <button
-                  className="btn btn-warning"
-                  onClick={() => handleStatusChange('cancelled')}
+                  className="btn btn-success"
+                  onClick={() => handleStatusChange('completed')}
                 >
-                  Cancel Request
+                  Confirm Completion
                 </button>
               )}
+
+              {isEndUser &&
+                jobRequest.cleaner_id !== null &&
+                ['pending', 'confirmed'].includes(jobRequest.status) && (
+                  <button
+                    className="btn btn-warning"
+                    onClick={() => handleStatusChange('cancelled')}
+                  >
+                    Cancel Request
+                  </button>
+                )}
 
               {isCleaner && jobRequest.status === 'pending' && (
                 <>
@@ -280,7 +304,7 @@ export default function JobRequestDetailPage() {
               {isCleaner && jobRequest.status === 'in_progress' && (
                 <button
                   className="btn btn-success"
-                  onClick={() => handleStatusChange('completed')}
+                  onClick={() => handleStatusChange('cleaner_completed')}
                 >
                   Mark as Completed
                 </button>

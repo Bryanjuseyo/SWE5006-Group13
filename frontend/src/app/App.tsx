@@ -24,6 +24,7 @@ import CleanerSchedulePage from '../pages/CleanerSchedulePage';
 import BrowseJobsPage from '../pages/BrowseJobsPage';
 import AdminUsersPage from '../pages/AdminUsersPage';
 import AdminBookingsPage from '../pages/AdminBookingsPage';
+import TwoFactorSetupPage from '../pages/TwoFactorSetupPage';
 
 export default function App() {
   return (
@@ -119,6 +120,15 @@ export default function App() {
         element={
           <RequireAuth>
             <ProfilePage />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/profile/2fa"
+        element={
+          <RequireAuth>
+            <TwoFactorSetupPage />
           </RequireAuth>
         }
       />
