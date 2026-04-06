@@ -3,7 +3,8 @@ from datetime import datetime, date, timedelta, timezone
 
 from sqlalchemy import or_, and_, false
 from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile, PRIORITY_WINDOW_HOURS
-
+from app.services.email_service import EmailService
+from app.models import UserProfile
 
 class JobRequestService:
     @staticmethod
@@ -439,6 +440,55 @@ class JobRequestService:
 
         job_request.status = new_status_enum
         db.session.commit()
+
+        end_user = job_request.end_user
+        cleaner = job_request.cleaner
+
+        end_user_profile = UserProfile.query.filter_by(user_id=end_user.id).first() if end_user else None
+        cleaner_profile = UserProfile.query.filter_by(user_id=cleaner.id).first() if cleaner else None
+
+        end_user_name = (
+            f"{end_user_profile.first_name} {end_user_profile.last_name}".strip()
+            if end_user_profile else "Customer"
+        )
+        cleaner_name = (
+            f"{cleaner_profile.first_name} {cleaner_profile.last_name}".strip()
+            if cleaner_profile else "Cleaner"
+        )
+
+        if new_status_enum == JobStatus.confirmed:
+            if end_user and end_user.email:
+                EmailService.send_booking_confirmation_email(
+                    to_email=end_user.email,
+                    recipient_name=end_user_name,
+                    job_request=job_request,
+                    recipient_role="end_user"
+                )
+
+            if cleaner and cleaner.email:
+                EmailService.send_booking_confirmation_email(
+                    to_email=cleaner.email,
+                    recipient_name=cleaner_name,
+                    job_request=job_request,
+                    recipient_role="cleaner"
+                )
+
+        elif new_status_enum == JobStatus.cancelled:
+            if end_user and end_user.email:
+                EmailService.send_booking_cancellation_email(
+                    to_email=end_user.email,
+                    recipient_name=end_user_name,
+                    job_request=job_request,
+                    recipient_role="end_user"
+                )
+
+            if cleaner and cleaner.email:
+                EmailService.send_booking_cancellation_email(
+                    to_email=cleaner.email,
+                    recipient_name=cleaner_name,
+                    job_request=job_request,
+                    recipient_role="cleaner"
+                )
 
         return {
             "message": f"Job request status updated to {new_status}.",
