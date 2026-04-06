@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: cleanmatch
       POSTGRES_USER: cleanmatch_user
-      POSTGRES_PASSWORD: securepassword123
+      POSTGRES_PASSWORD: cleanmatch_password
     ports:
       - "5432:5432"
     volumes:
