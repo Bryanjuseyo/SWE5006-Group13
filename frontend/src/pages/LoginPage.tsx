@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, type Location } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { login, verify2FA, resend2FA } from '../api/auth';
+import { login, verify2FA, resend2FA, type LoginSuccessResponse } from '../api/auth';
 import { setAuth } from '../auth/storage';
 
 type LoginLocationState = {
@@ -42,7 +42,8 @@ export default function LoginPage() {
       if ('requires_2fa' in res && res.requires_2fa) {
         setTempToken(res.temp_token);
       } else {
-        setAuth(res.token, res.user);
+        const success = res as LoginSuccessResponse;
+        setAuth(success.token, success.user);
         navigate('/dashboard', { replace: true });
       }
     } catch (err: unknown) {
