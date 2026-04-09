@@ -71,11 +71,11 @@ export default function AdminDashboard() {
 
         const [statsData, bookingsData] = await Promise.all([
           getAdminStats(token!),
-          getAdminBookings(token!),
+          getAdminBookings(token!, { page: 1, perPage: 5 }),
         ]);
 
         setStats(statsData);
-        setRecentBookings(bookingsData.job_requests.slice(0, 5));
+        setRecentBookings(bookingsData.job_requests);
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'Failed to load dashboard.'));
       } finally {

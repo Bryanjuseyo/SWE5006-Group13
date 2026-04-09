@@ -18,6 +18,14 @@ def _auth_guard():
     pass
 
 
+def _parse_pagination_args():
+    page = request.args.get("page", default=1, type=int)
+    per_page = request.args.get("per_page", default=25, type=int)
+    if page is None or per_page is None:
+        raise ValueError("invalid_pagination|page and per_page must be integers.")
+    return page, per_page
+
+
 @admin_bp.get("/dashboard")
 def dashboard():
     return jsonify(message=f"Welcome admin {g.user['email']}")
@@ -35,10 +43,13 @@ def get_users():
     banned_filter = request.args.get("banned")
     search = request.args.get("search")
     try:
+        page, per_page = _parse_pagination_args()
         data = AdminService.get_all_users(
             role_filter=role_filter,
             banned_filter=banned_filter,
             search=search,
+            page=page,
+            per_page=per_page,
         )
         return jsonify(data)
     except ValueError as e:
@@ -79,9 +90,12 @@ def get_bookings():
     status_filter = request.args.get("status")
     search = request.args.get("search")
     try:
+        page, per_page = _parse_pagination_args()
         data = AdminService.get_all_bookings(
             status_filter=status_filter,
             search=search,
+            page=page,
+            per_page=per_page,
         )
         return jsonify(data)
     except ValueError as e:

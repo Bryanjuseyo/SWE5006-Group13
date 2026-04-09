@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import Navbar from '../components/Navbar';
-import { getAdminUsers, banUser, unbanUser, type AdminUser } from '../api/admin';
+import {
+  getAdminUsers,
+  banUser,
+  unbanUser,
+  type AdminUser,
+  type PaginationMeta,
+} from '../api/admin';
 import { getToken } from '../auth/storage';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -23,13 +29,17 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export default function AdminUsersPage() {
+  const USERS_PER_PAGE = 25;
   const token = getToken();
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState('');
   const [bannedFilter, setBannedFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [page, setPage] = useState(1);
   const [banReason, setBanReason] = useState('');
   const [banningUserId, setBanningUserId] = useState<number | null>(null);
 
@@ -37,6 +47,12 @@ export default function AdminUsersPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('banned')) setBannedFilter(params.get('banned')!);
     if (params.get('role')) setRoleFilter(params.get('role')!);
+    if (params.get('search')) {
+      setSearch(params.get('search')!);
+      setSearchInput(params.get('search')!);
+    }
+    const pageParam = Number(params.get('page'));
+    if (Number.isInteger(pageParam) && pageParam > 0) setPage(pageParam);
   }, []);
 
   const fetchUsers = useCallback(async () => {
@@ -44,23 +60,38 @@ export default function AdminUsersPage() {
       setLoading(true);
       setError(null);
 
-      const params: { role?: string; banned?: string; search?: string } = {};
+      const params: { role?: string; banned?: string; search?: string; page?: number; perPage?: number } = {
+        page,
+        perPage: USERS_PER_PAGE,
+      };
       if (roleFilter) params.role = roleFilter;
       if (bannedFilter) params.banned = bannedFilter;
       if (search) params.search = search;
 
       const res = await getAdminUsers(token!, params);
       setUsers(res.users);
+      setPagination(res.pagination);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load users.'));
     } finally {
       setLoading(false);
     }
-  }, [roleFilter, bannedFilter, search, token]);
+  }, [roleFilter, bannedFilter, search, token, page]);
 
   useEffect(() => {
     void fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (roleFilter) params.set('role', roleFilter);
+    if (bannedFilter) params.set('banned', bannedFilter);
+    if (search) params.set('search', search);
+    if (page > 1) params.set('page', String(page));
+    const query = params.toString();
+    const newUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
+    window.history.replaceState({}, '', newUrl);
+  }, [roleFilter, bannedFilter, search, page]);
 
   async function handleBan(userId: number) {
     try {
@@ -86,7 +117,8 @@ export default function AdminUsersPage() {
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
-    void fetchUsers();
+    setSearch(searchInput.trim());
+    setPage(1);
   }
 
   return (
@@ -101,7 +133,10 @@ export default function AdminUsersPage() {
             className="form-select"
             style={{ maxWidth: 160 }}
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="">All Roles</option>
             <option value="end_user">End Users</option>
@@ -113,7 +148,10 @@ export default function AdminUsersPage() {
             className="form-select"
             style={{ maxWidth: 140 }}
             value={bannedFilter}
-            onChange={(e) => setBannedFilter(e.target.value)}
+            onChange={(e) => {
+              setBannedFilter(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="">All Status</option>
             <option value="false">Active</option>
@@ -125,8 +163,8 @@ export default function AdminUsersPage() {
               type="text"
               className="form-control"
               placeholder="Search by email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
             <button type="submit" className="btn btn-outline-primary btn-sm">
               Search
@@ -245,6 +283,34 @@ export default function AdminUsersPage() {
                 </tbody>
               </table>
             </div>
+            {pagination && (
+              <div className="card-footer bg-white d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <div className="text-muted small">
+                  Showing {(pagination.page - 1) * pagination.per_page + 1}-
+                  {Math.min(pagination.page * pagination.per_page, pagination.total)} of{' '}
+                  {pagination.total} users
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    disabled={!pagination.has_prev}
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  >
+                    Previous
+                  </button>
+                  <span className="small text-muted">
+                    Page {pagination.page} of {Math.max(pagination.total_pages, 1)}
+                  </span>
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    disabled={!pagination.has_next}
+                    onClick={() => setPage((prev) => prev + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
