@@ -6,6 +6,7 @@ import {
   updateJobStatus,
   type JobRequest,
   type JobStatus,
+  type PaginationMeta,
 } from '../api/job_requests';
 import { getToken, getUser } from '../auth/storage';
 
@@ -37,13 +38,16 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export default function JobRequestList() {
+  const JOBS_PER_PAGE = 25;
   const token = getToken();
   const user = getUser();
 
   const [jobRequests, setJobRequests] = useState<JobRequest[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('');
+  const [page, setPage] = useState(1);
 
   const isEndUser = user?.role === 'end_user';
   const isCleaner = user?.role === 'cleaner';
@@ -52,14 +56,15 @@ export default function JobRequestList() {
     try {
       setLoading(true);
       setError(null);
-      const res = await getJobRequests(token!, statusFilter || undefined);
+      const res = await getJobRequests(token!, statusFilter || undefined, page, JOBS_PER_PAGE);
       setJobRequests(res.job_requests);
+      setPagination(res.pagination);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load job requests.'));
     } finally {
       setLoading(false);
     }
-  }, [token, statusFilter]);
+  }, [token, statusFilter, page]);
 
   useEffect(() => {
     void fetchJobRequests();
@@ -113,7 +118,10 @@ export default function JobRequestList() {
           className="form-select"
           style={{ maxWidth: 200 }}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as JobStatus | '')}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as JobStatus | '');
+            setPage(1);
+          }}
         >
           <option value="">All</option>
           <option value="pending">Pending</option>
@@ -151,6 +159,7 @@ export default function JobRequestList() {
           )}
         </div>
       ) : (
+        <>
         <div className="row g-3">
           {jobRequests.map((job) => (
             <div key={job.id} className="col-12">
@@ -316,6 +325,35 @@ export default function JobRequestList() {
             </div>
           ))}
         </div>
+        {pagination && (
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-4">
+            <div className="text-muted small">
+              Showing {(pagination.page - 1) * pagination.per_page + 1}-
+              {Math.min(pagination.page * pagination.per_page, pagination.total)} of{' '}
+              {pagination.total} job requests
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                disabled={!pagination.has_prev}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </button>
+              <span className="small text-muted">
+                Page {pagination.page} of {Math.max(pagination.total_pages, 1)}
+              </span>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                disabled={!pagination.has_next}
+                onClick={() => setPage((prev) => prev + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </>
   );

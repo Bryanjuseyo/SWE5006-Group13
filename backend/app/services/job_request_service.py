@@ -9,6 +9,39 @@ from app.services.email_service import EmailService
 
 class JobRequestService:
     @staticmethod
+    def _paginate_query(query, page: int, per_page: int):
+        if page < 1:
+            raise ValueError("invalid_pagination|page must be at least 1.")
+        if per_page < 1:
+            raise ValueError("invalid_pagination|per_page must be at least 1.")
+
+        per_page = min(per_page, 100)
+
+        total = query.order_by(None).count()
+        if not isinstance(total, int):
+            items = query.all()
+            return items, {
+                "page": 1,
+                "per_page": len(items) or per_page,
+                "total": len(items),
+                "total_pages": 1 if items else 0,
+                "has_prev": False,
+                "has_next": False,
+            }
+
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return items, {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        }
+
+    @staticmethod
     def _job_request_load_options(include_user_profiles: bool = False):
         end_user_option = joinedload(JobRequest.end_user)
         cleaner_option = joinedload(JobRequest.cleaner)
@@ -318,7 +351,9 @@ class JobRequestService:
     def get_job_requests(
         user_id: int,
         role: str,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
     ) -> Dict[str, Any]:
         """
         Get job requests based on user role.
@@ -379,9 +414,12 @@ class JobRequestService:
 
         # Order by most recent first
         query = query.order_by(JobRequest.created_at.desc())
-        job_requests = query.all()
+        job_requests, pagination = JobRequestService._paginate_query(query, page, per_page)
 
-        return {"job_requests": [jr.to_dict() for jr in job_requests]}
+        return {
+            "job_requests": [jr.to_dict() for jr in job_requests],
+            "pagination": pagination,
+        }
 
     @staticmethod
     def update_job_status(
@@ -539,7 +577,7 @@ class JobRequestService:
         }
 
     @staticmethod
-    def get_cleaner_schedule(user_id: int) -> Dict[str, Any]:
+    def get_cleaner_schedule(user_id: int, page: int = 1, per_page: int = 25) -> Dict[str, Any]:
         """
         Return upcoming confirmed or in_progress jobs for a cleaner.
         Ordered by date then start time.
@@ -555,17 +593,23 @@ class JobRequestService:
                 JobRequest.deleted_at.is_(None),
             )
             .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
-            .all()
         )
-        return {"schedule": [j.to_dict() for j in jobs]}
+        jobs, pagination = JobRequestService._paginate_query(jobs, page, per_page)
+        return {"schedule": [j.to_dict() for j in jobs], "pagination": pagination}
 
     @staticmethod
-    def get_available_jobs(user_id: int) -> Dict[str, Any]:
+    def get_available_jobs(user_id: int, page: int = 1, per_page: int = 25) -> Dict[str, Any]:
         """
         Return open (unassigned, pending) job requests that match the cleaner's
         service_type and fall within their availability slots.
         Excludes jobs in a priority window for a different cleaner.
         """
+        if page < 1:
+            raise ValueError("invalid_pagination|page must be at least 1.")
+        if per_page < 1:
+            raise ValueError("invalid_pagination|per_page must be at least 1.")
+        per_page = min(per_page, 100)
+
         cleaner_profile = (
             CleanerProfile.query
             .options(joinedload(CleanerProfile.availability))
@@ -573,12 +617,22 @@ class JobRequestService:
             .first()
         )
         if not cleaner_profile:
-            return {"job_requests": []}
+            return {
+                "job_requests": [],
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": 0,
+                    "total_pages": 0,
+                    "has_prev": False,
+                    "has_next": False,
+                },
+            }
 
         today = date.today()
         now = datetime.now(timezone.utc)
 
-        jobs = (
+        jobs_query = (
             JobRequest.query
             .options(*JobRequestService._job_request_load_options())
             .filter(
@@ -599,8 +653,8 @@ class JobRequestService:
                 ),
             )
             .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
-            .all()
         )
+        jobs = jobs_query.all()
 
         # If the cleaner has availability slots, only show jobs that fit within them.
         # If no slots are set, all matching jobs are shown.
@@ -608,7 +662,23 @@ class JobRequestService:
         if availability:
             jobs = [j for j in jobs if JobRequestService._job_fits_availability(j, availability)]
 
-        return {"job_requests": [j.to_dict() for j in jobs]}
+        total = len(jobs)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paged_jobs = jobs[start:end]
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return {
+            "job_requests": [j.to_dict() for j in paged_jobs],
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            },
+        }
 
     @staticmethod
     def _job_fits_availability(job, slots) -> bool:

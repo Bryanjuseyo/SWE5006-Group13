@@ -28,6 +28,14 @@ def _handle_error(e):
     return jsonify({"error": error, "message": message}), status
 
 
+def _parse_pagination_args():
+    page = request.args.get("page", default=1, type=int)
+    per_page = request.args.get("per_page", default=25, type=int)
+    if page is None or per_page is None:
+        raise ValueError("invalid_pagination|page and per_page must be integers.")
+    return page, per_page
+
+
 # =============================================
 # JOB REQUEST CRUD ENDPOINTS
 # =============================================
@@ -62,7 +70,8 @@ def list_job_requests():
     status = request.args.get("status")
 
     try:
-        result = JobRequestService.get_job_requests(user_id, role, status)
+        page, per_page = _parse_pagination_args()
+        result = JobRequestService.get_job_requests(user_id, role, status, page, per_page)
         return jsonify(result), 200
     except ValueError as e:
         return _handle_error(e)
