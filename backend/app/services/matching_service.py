@@ -1,9 +1,10 @@
 from typing import Dict, Any, List
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import and_, case, exists, func, or_, literal
 from app.models import (
     db, User, UserRole, UserProfile, JobRequest, JobStatus,
-    CleanerProfile, PRIORITY_WINDOW_HOURS,
+    CleanerProfile, CleanerAvailability, PRIORITY_WINDOW_HOURS,
 )
 
 
@@ -29,42 +30,134 @@ class MatchingService:
         if job.status != JobStatus.pending:
             raise ValueError("invalid_status|Can only match cleaners for pending jobs.")
 
-        # Get all active (non-banned) cleaners with profiles
-        cleaners = (
-            db.session.query(User, CleanerProfile)
+        booked_job_filters = [
+            JobRequest.cleaner_id == User.id,
+            JobRequest.deleted_at.is_(None),
+            JobRequest.status.in_([
+                JobStatus.confirmed,
+                JobStatus.in_progress,
+            ]),
+            JobRequest.preferred_date == job.preferred_date,
+            JobRequest.id != job.id,
+        ]
+
+        if job.preferred_time_start and job.preferred_time_end:
+            booked_job_filters.append(
+                or_(
+                    JobRequest.preferred_time_start.is_(None),
+                    and_(
+                        JobRequest.preferred_time_start < job.preferred_time_end,
+                        JobRequest.preferred_time_end > job.preferred_time_start,
+                    ),
+                )
+            )
+
+        booked_overlap_exists = exists().where(and_(*booked_job_filters))
+
+        availability_date_filters = [
+            CleanerAvailability.cleaner_profile_id == CleanerProfile.id,
+            CleanerAvailability.start_date <= job.preferred_date,
+            CleanerAvailability.end_date >= job.preferred_date,
+        ]
+        has_any_availability = exists().where(
+            CleanerAvailability.cleaner_profile_id == CleanerProfile.id
+        )
+
+        if job.preferred_time_start is None:
+            matching_availability_exists = exists().where(and_(*availability_date_filters))
+        else:
+            matching_time_filters = list(availability_date_filters)
+            matching_time_filters.append(
+                or_(
+                    and_(
+                        CleanerAvailability.start_time.is_(None),
+                        CleanerAvailability.end_time.is_(None),
+                    ),
+                    and_(
+                        or_(
+                            CleanerAvailability.start_time.is_(None),
+                            CleanerAvailability.start_time <= job.preferred_time_start,
+                        ),
+                        or_(
+                            CleanerAvailability.end_time.is_(None),
+                            job.preferred_time_end is None,
+                            CleanerAvailability.end_time >= job.preferred_time_end,
+                        ),
+                    ),
+                )
+            )
+            matching_availability_exists = exists().where(and_(*matching_time_filters))
+
+        availability_score = case(
+            (matching_availability_exists, 30),
+            (~has_any_availability, 15),
+            else_=0,
+        )
+        experience_score = func.least(
+            func.coalesce(CleanerProfile.years_experience, 0) * 2,
+            20,
+        )
+        rate_score = case(
+            (CleanerProfile.hourly_rate <= 20, 10),
+            (CleanerProfile.hourly_rate <= 35, 7),
+            (CleanerProfile.hourly_rate <= 50, 4),
+            (CleanerProfile.hourly_rate.isnot(None), 1),
+            else_=0,
+        )
+        score_expr = (
+            literal(40)
+            + availability_score
+            + experience_score
+            + rate_score
+        ).label("score")
+
+        matches = (
+            db.session.query(
+                User.id.label("cleaner_id"),
+                User.email.label("email"),
+                UserProfile.first_name.label("first_name"),
+                UserProfile.last_name.label("last_name"),
+                CleanerProfile.service_type.label("service_type"),
+                CleanerProfile.hourly_rate.label("hourly_rate"),
+                CleanerProfile.years_experience.label("years_experience"),
+                score_expr,
+            )
             .join(CleanerProfile, User.id == CleanerProfile.user_id)
+            .outerjoin(UserProfile, User.id == UserProfile.user_id)
             .filter(
                 User.role == UserRole.cleaner,
                 User.is_banned.is_(False),
+                CleanerProfile.service_type == job.service_type,
+                ~booked_overlap_exists,
             )
+            .order_by(score_expr.desc())
+            .limit(5)
             .all()
         )
 
         scored: List[Dict[str, Any]] = []
-        for user, profile in cleaners:
-            score = MatchingService._score_cleaner(job, user, profile)
-            if score > 0:
-                user_profile = UserProfile.query.filter_by(user_id=user.id).first()
-                scored.append({
-                    "cleaner_id": user.id,
-                    "email": user.email,
-                    "name": (
-                        f"{user_profile.first_name} {user_profile.last_name}"
-                        if user_profile else user.email
-                    ),
-                    "service_type": profile.service_type.value,
-                    "hourly_rate": float(profile.hourly_rate) if profile.hourly_rate else None,
-                    "years_experience": profile.years_experience,
-                    "score": score,
-                })
+        for match in matches:
+            if match.score <= 0:
+                continue
 
-        # Sort by score descending
-        scored.sort(key=lambda x: x["score"], reverse=True)
+            if match.first_name and match.last_name:
+                name = f"{match.first_name} {match.last_name}"
+            else:
+                name = match.email
 
-        # Return top 5 matches
+            scored.append({
+                "cleaner_id": match.cleaner_id,
+                "email": match.email,
+                "name": name,
+                "service_type": match.service_type.value,
+                "hourly_rate": float(match.hourly_rate) if match.hourly_rate else None,
+                "years_experience": match.years_experience,
+                "score": float(match.score),
+            })
+
         return {
             "job_request_id": job.id,
-            "matches": scored[:5],
+            "matches": scored,
         }
 
     @staticmethod

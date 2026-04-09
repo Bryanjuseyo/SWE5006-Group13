@@ -41,6 +41,9 @@ class JobStatus(enum.Enum):
 
 class User(db.Model, UserMixin):
     __tablename__ = 'users'
+    __table_args__ = (
+        db.Index('ix_users_role_is_banned', 'role', 'is_banned'),
+    )
 
     id = db.Column(db.BigInteger, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
@@ -147,7 +150,7 @@ class CleanerProfile(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True)
     user_id = db.Column(db.BigInteger, db.ForeignKey('users.id', ondelete='CASCADE'), unique=True, nullable=False)
-    service_type = db.Column(db.Enum(ServiceType), nullable=False)
+    service_type = db.Column(db.Enum(ServiceType), nullable=False, index=True)
     hourly_rate = db.Column(db.Numeric(10, 2))
     years_experience = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -229,6 +232,12 @@ class CleanerAvailability(db.Model):
     end_time = db.Column(db.Time)
 
     __table_args__ = (
+        db.Index(
+            'ix_cleaner_availability_profile_dates',
+            'cleaner_profile_id',
+            'start_date',
+            'end_date',
+        ),
         db.CheckConstraint('end_date >= start_date'),
         db.CheckConstraint('end_time IS NULL OR (start_time IS NOT NULL AND end_time > start_time)'),
     )
@@ -250,6 +259,21 @@ class CleanerAvailability(db.Model):
 
 class JobRequest(db.Model):
     __tablename__ = 'job_requests'
+    __table_args__ = (
+        db.Index(
+            'ix_job_requests_cleaner_date_status_deleted',
+            'cleaner_id',
+            'preferred_date',
+            'status',
+            'deleted_at',
+        ),
+        db.Index(
+            'ix_job_requests_date_status_deleted',
+            'preferred_date',
+            'status',
+            'deleted_at',
+        ),
+    )
 
     id = db.Column(db.BigInteger, primary_key=True)
     end_user_id = db.Column(

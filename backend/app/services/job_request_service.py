@@ -2,11 +2,35 @@ from typing import Dict, Any, Optional
 from datetime import datetime, date, timedelta, timezone
 
 from sqlalchemy import or_, and_, false
+from sqlalchemy.orm import joinedload
 from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile, PRIORITY_WINDOW_HOURS
 from app.services.email_service import EmailService
-from app.models import UserProfile
+
 
 class JobRequestService:
+    @staticmethod
+    def _job_request_load_options(include_user_profiles: bool = False):
+        end_user_option = joinedload(JobRequest.end_user)
+        cleaner_option = joinedload(JobRequest.cleaner)
+
+        if include_user_profiles:
+            end_user_option = end_user_option.joinedload(User.profile)
+            cleaner_option = cleaner_option.joinedload(User.profile)
+
+        return end_user_option, cleaner_option
+
+    @staticmethod
+    def _get_job_request_with_relationships(
+        job_request_id: int,
+        include_user_profiles: bool = False,
+    ):
+        return (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options(include_user_profiles))
+            .filter_by(id=job_request_id)
+            .first()
+        )
+
     @staticmethod
     def create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
         """
@@ -100,6 +124,9 @@ class JobRequestService:
         )
         db.session.add(job_request)
         db.session.commit()
+
+        # Eager-load relationships so to_dict() doesn't trigger extra queries.
+        job_request = JobRequestService._get_job_request_with_relationships(job_request.id)
 
         return {
             "message": "Job request created successfully.",
@@ -217,6 +244,9 @@ class JobRequestService:
 
         db.session.commit()
 
+        # Refresh with eager-loaded relationships for to_dict().
+        job_request = JobRequestService._get_job_request_with_relationships(job_request.id)
+
         return {
             "message": "Job request updated successfully.",
             "job_request": job_request.to_dict()
@@ -256,9 +286,13 @@ class JobRequestService:
         End users can only view their own requests.
         Cleaners can view requests assigned to them or unassigned pending requests.
         """
-        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
-            JobRequest.deleted_at.is_(None)
-        ).first()
+        job_request = (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
+            .filter_by(id=job_request_id)
+            .filter(JobRequest.deleted_at.is_(None))
+            .first()
+        )
         if not job_request:
             raise ValueError("not_found|Job request not found.")
 
@@ -339,6 +373,9 @@ class JobRequestService:
 
         # Exclude soft-deleted records
         query = query.filter(JobRequest.deleted_at.is_(None))
+
+        # Eager-load relationships so to_dict() doesn't trigger N+1 queries.
+        query = query.options(*JobRequestService._job_request_load_options())
 
         # Order by most recent first
         query = query.order_by(JobRequest.created_at.desc())
@@ -441,11 +478,17 @@ class JobRequestService:
         job_request.status = new_status_enum
         db.session.commit()
 
+        # Re-fetch with eager-loaded relationships to avoid lazy-load queries.
+        job_request = JobRequestService._get_job_request_with_relationships(
+            job_request.id,
+            include_user_profiles=True,
+        )
+
         end_user = job_request.end_user
         cleaner = job_request.cleaner
 
-        end_user_profile = UserProfile.query.filter_by(user_id=end_user.id).first() if end_user else None
-        cleaner_profile = UserProfile.query.filter_by(user_id=cleaner.id).first() if cleaner else None
+        end_user_profile = end_user.profile if end_user else None
+        cleaner_profile = cleaner.profile if cleaner else None
 
         end_user_name = (
             f"{end_user_profile.first_name} {end_user_profile.last_name}".strip()
@@ -504,6 +547,7 @@ class JobRequestService:
         today = date.today()
         jobs = (
             JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
             .filter(
                 JobRequest.cleaner_id == user_id,
                 JobRequest.status.in_([JobStatus.confirmed, JobStatus.in_progress]),
@@ -522,7 +566,12 @@ class JobRequestService:
         service_type and fall within their availability slots.
         Excludes jobs in a priority window for a different cleaner.
         """
-        cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+        cleaner_profile = (
+            CleanerProfile.query
+            .options(joinedload(CleanerProfile.availability))
+            .filter_by(user_id=user_id)
+            .first()
+        )
         if not cleaner_profile:
             return {"job_requests": []}
 
@@ -531,6 +580,7 @@ class JobRequestService:
 
         jobs = (
             JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
             .filter(
                 JobRequest.status == JobStatus.pending,
                 JobRequest.service_type == cleaner_profile.service_type,
