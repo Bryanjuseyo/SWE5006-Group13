@@ -1,7 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import Navbar from '../components/Navbar';
 import { getToken } from '../auth/storage';
-import { getCleanerSchedule, updateJobStatus, type JobRequest, type JobStatus } from '../api/job_requests';
+import {
+  getCleanerSchedule,
+  updateJobStatus,
+  type JobRequest,
+  type JobStatus,
+  type PaginationMeta,
+} from '../api/job_requests';
 
 const STATUS_LABELS: Record<JobStatus, string> = {
   pending: 'Pending',
@@ -48,23 +54,27 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export default function CleanerSchedulePage() {
+  const JOBS_PER_PAGE = 25;
   const token = getToken();
   const [schedule, setSchedule] = useState<JobRequest[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getCleanerSchedule(token!);
+      const res = await getCleanerSchedule(token!, page, JOBS_PER_PAGE);
       setSchedule(res.schedule);
+      setPagination(res.pagination);
     } catch (e: unknown) {
       setError(getErrorMessage(e, 'Failed to load schedule.'));
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, page]);
 
   useEffect(() => {
     void load();
@@ -114,6 +124,7 @@ export default function CleanerSchedulePage() {
             No upcoming jobs scheduled. Accept some jobs to get started.
           </div>
         ) : (
+          <>
           <div className="d-flex flex-column gap-3">
             {schedule.map((job) => (
               <div key={job.id} className="card shadow-sm">
@@ -195,6 +206,35 @@ export default function CleanerSchedulePage() {
               </div>
             ))}
           </div>
+          {pagination && (
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-4">
+              <div className="text-muted small">
+                Showing {(pagination.page - 1) * pagination.per_page + 1}-
+                {Math.min(pagination.page * pagination.per_page, pagination.total)} of{' '}
+                {pagination.total} scheduled jobs
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={!pagination.has_prev}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                >
+                  Previous
+                </button>
+                <span className="small text-muted">
+                  Page {pagination.page} of {Math.max(pagination.total_pages, 1)}
+                </span>
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={!pagination.has_next}
+                  onClick={() => setPage((prev) => prev + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </main>
     </>

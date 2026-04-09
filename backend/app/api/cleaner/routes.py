@@ -21,6 +21,14 @@ def _handle_error(e):
     return jsonify({"error": error, "message": message}), status_codes.get(error, 400)
 
 
+def _parse_pagination_args():
+    page = request.args.get("page", default=1, type=int)
+    per_page = request.args.get("per_page", default=25, type=int)
+    if page is None or per_page is None:
+        raise ValueError("invalid_pagination|page and per_page must be integers.")
+    return page, per_page
+
+
 @cleaner_bp.before_request
 def _guard():
     # Let CORS preflight through before touching auth headers
@@ -133,7 +141,11 @@ def delete_availability(availability_id):
 def get_schedule():
     """Return upcoming confirmed/in_progress jobs for the cleaner."""
     user_id = g.user["user_id"]
-    return jsonify(JobRequestService.get_cleaner_schedule(user_id)), 200
+    try:
+        page, per_page = _parse_pagination_args()
+        return jsonify(JobRequestService.get_cleaner_schedule(user_id, page, per_page)), 200
+    except ValueError as e:
+        return _handle_error(e)
 
 
 @cleaner_bp.get("/available-jobs")
@@ -142,4 +154,8 @@ def get_schedule():
 def get_available_jobs():
     """Return open (unassigned, pending) jobs matching the cleaner's service type."""
     user_id = g.user["user_id"]
-    return jsonify(JobRequestService.get_available_jobs(user_id)), 200
+    try:
+        page, per_page = _parse_pagination_args()
+        return jsonify(JobRequestService.get_available_jobs(user_id, page, per_page)), 200
+    except ValueError as e:
+        return _handle_error(e)

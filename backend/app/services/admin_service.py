@@ -1,12 +1,34 @@
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
+from sqlalchemy.orm import joinedload
+
 from app.models import (
-    db, User, UserRole, UserProfile, JobRequest, JobStatus,
+    db, User, UserRole, JobRequest, JobStatus,
 )
 
 
 class AdminService:
+    @staticmethod
+    def _paginate(query, page: int, per_page: int):
+        if page < 1:
+            raise ValueError("invalid_pagination|page must be at least 1.")
+        if per_page < 1:
+            raise ValueError("invalid_pagination|per_page must be at least 1.")
+
+        per_page = min(per_page, 100)
+        total = query.order_by(None).count()
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return items, {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        }
 
     @staticmethod
     def get_dashboard_stats() -> Dict[str, Any]:
@@ -66,8 +88,10 @@ class AdminService:
         role_filter: Optional[str] = None,
         banned_filter: Optional[str] = None,
         search: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
     ) -> Dict[str, Any]:
-        query = User.query
+        query = User.query.options(joinedload(User.profile))
 
         if role_filter:
             try:
@@ -88,19 +112,19 @@ class AdminService:
             query = query.filter(User.email.ilike(search_term))
 
         query = query.order_by(User.created_at.desc())
-        users = query.all()
+        users, pagination = AdminService._paginate(query, page, per_page)
 
         result = []
         for u in users:
             user_dict = u.to_dict()
-            profile = UserProfile.query.filter_by(user_id=u.id).first()
+            profile = u.profile
             if profile:
                 user_dict["profile"] = profile.to_dict()
             else:
                 user_dict["profile"] = None
             result.append(user_dict)
 
-        return {"users": result}
+        return {"users": result, "pagination": pagination}
 
     @staticmethod
     def ban_user(user_id: int, reason: Optional[str] = None) -> Dict[str, Any]:
@@ -194,8 +218,14 @@ class AdminService:
     def get_all_bookings(
         status_filter: Optional[str] = None,
         search: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
     ) -> Dict[str, Any]:
-        query = JobRequest.query.filter(JobRequest.deleted_at.is_(None))
+        query = (
+            JobRequest.query
+            .options(joinedload(JobRequest.end_user), joinedload(JobRequest.cleaner))
+            .filter(JobRequest.deleted_at.is_(None))
+        )
 
         if status_filter:
             try:
@@ -210,6 +240,9 @@ class AdminService:
             query = query.filter(JobRequest.title.ilike(search_term))
 
         query = query.order_by(JobRequest.created_at.desc())
-        jobs = query.all()
+        jobs, pagination = AdminService._paginate(query, page, per_page)
 
-        return {"job_requests": [j.to_dict() for j in jobs]}
+        return {
+            "job_requests": [j.to_dict() for j in jobs],
+            "pagination": pagination,
+        }
