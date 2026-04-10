@@ -2,10 +2,71 @@ from typing import Dict, Any, Optional
 from datetime import datetime, date, timedelta, timezone
 
 from sqlalchemy import or_, and_, false
-from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile, PRIORITY_WINDOW_HOURS
+from sqlalchemy.orm import joinedload
+from app.models import (
+    db, JobRequest, JobStatus, ServiceType, User, UserRole,
+    UserProfile, CleanerProfile, PRIORITY_WINDOW_HOURS
+)
+from app.services.email_service import EmailService
 
 
 class JobRequestService:
+    @staticmethod
+    def _paginate_query(query, page: int, per_page: int):
+        if page < 1:
+            raise ValueError("invalid_pagination|page must be at least 1.")
+        if per_page < 1:
+            raise ValueError("invalid_pagination|per_page must be at least 1.")
+
+        per_page = min(per_page, 100)
+
+        total = query.order_by(None).count()
+        if not isinstance(total, int):
+            items = query.all()
+            return items, {
+                "page": 1,
+                "per_page": len(items) or per_page,
+                "total": len(items),
+                "total_pages": 1 if items else 0,
+                "has_prev": False,
+                "has_next": False,
+            }
+
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return items, {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        }
+
+    @staticmethod
+    def _job_request_load_options(include_user_profiles: bool = False):
+        end_user_option = joinedload(JobRequest.end_user)
+        cleaner_option = joinedload(JobRequest.cleaner)
+
+        if include_user_profiles:
+            end_user_option = end_user_option.joinedload(User.profile)
+            cleaner_option = cleaner_option.joinedload(User.profile)
+
+        return end_user_option, cleaner_option
+
+    @staticmethod
+    def _get_job_request_with_relationships(
+        job_request_id: int,
+        include_user_profiles: bool = False,
+    ):
+        return (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options(include_user_profiles))
+            .filter_by(id=job_request_id)
+            .first()
+        )
+
     @staticmethod
     def create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
         """
@@ -99,6 +160,9 @@ class JobRequestService:
         )
         db.session.add(job_request)
         db.session.commit()
+
+        # Eager-load relationships so to_dict() doesn't trigger extra queries.
+        job_request = JobRequestService._get_job_request_with_relationships(job_request.id)
 
         return {
             "message": "Job request created successfully.",
@@ -216,6 +280,9 @@ class JobRequestService:
 
         db.session.commit()
 
+        # Refresh with eager-loaded relationships for to_dict().
+        job_request = JobRequestService._get_job_request_with_relationships(job_request.id)
+
         return {
             "message": "Job request updated successfully.",
             "job_request": job_request.to_dict()
@@ -237,8 +304,8 @@ class JobRequestService:
         if job_request.end_user_id != user_id:
             raise ValueError("forbidden|You are not authorized to delete this job request.")
 
-        # Cannot delete in_progress or completed jobs
-        if job_request.status in [JobStatus.in_progress, JobStatus.completed]:
+        # Cannot delete in_progress, cleaner_completed, or completed jobs
+        if job_request.status in [JobStatus.in_progress, JobStatus.cleaner_completed, JobStatus.completed]:
             raise ValueError(
                 "invalid_status|Cannot delete a job request that is in progress or completed."
             )
@@ -255,9 +322,13 @@ class JobRequestService:
         End users can only view their own requests.
         Cleaners can view requests assigned to them or unassigned pending requests.
         """
-        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
-            JobRequest.deleted_at.is_(None)
-        ).first()
+        job_request = (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
+            .filter_by(id=job_request_id)
+            .filter(JobRequest.deleted_at.is_(None))
+            .first()
+        )
         if not job_request:
             raise ValueError("not_found|Job request not found.")
 
@@ -283,7 +354,9 @@ class JobRequestService:
     def get_job_requests(
         user_id: int,
         role: str,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
     ) -> Dict[str, Any]:
         """
         Get job requests based on user role.
@@ -339,11 +412,17 @@ class JobRequestService:
         # Exclude soft-deleted records
         query = query.filter(JobRequest.deleted_at.is_(None))
 
+        # Eager-load relationships so to_dict() doesn't trigger N+1 queries.
+        query = query.options(*JobRequestService._job_request_load_options())
+
         # Order by most recent first
         query = query.order_by(JobRequest.created_at.desc())
-        job_requests = query.all()
+        job_requests, pagination = JobRequestService._paginate_query(query, page, per_page)
 
-        return {"job_requests": [jr.to_dict() for jr in job_requests]}
+        return {
+            "job_requests": [jr.to_dict() for jr in job_requests],
+            "pagination": pagination,
+        }
 
     @staticmethod
     def update_job_status(
@@ -371,20 +450,28 @@ class JobRequestService:
 
         current_status = job_request.status
 
-        # End user can only cancel their own requests once a cleaner has been assigned
+        # End user status transitions
         if role == "end_user":
             if job_request.end_user_id != user_id:
                 raise ValueError("forbidden|You are not authorized to update this job request.")
-            if new_status_enum != JobStatus.cancelled:
-                raise ValueError("forbidden|End users can only cancel job requests.")
-            if job_request.cleaner_id is None:
-                raise ValueError(
-                    "forbidden|Cannot cancel a job request that has not been assigned to a cleaner."
-                )
-            if current_status not in [JobStatus.pending, JobStatus.confirmed]:
-                raise ValueError(
-                    "invalid_status|Can only cancel pending or confirmed job requests."
-                )
+
+            if new_status_enum == JobStatus.completed:
+                # End user can confirm completion only after cleaner has marked it done
+                if current_status != JobStatus.cleaner_completed:
+                    raise ValueError(
+                        "invalid_status|Can only confirm completion after the cleaner has marked the job as done."
+                    )
+            elif new_status_enum == JobStatus.cancelled:
+                if job_request.cleaner_id is None:
+                    raise ValueError(
+                        "forbidden|Cannot cancel a job request that has not been assigned to a cleaner."
+                    )
+                if current_status not in [JobStatus.pending, JobStatus.confirmed]:
+                    raise ValueError(
+                        "invalid_status|Can only cancel pending or confirmed job requests."
+                    )
+            else:
+                raise ValueError("forbidden|End users can only cancel or confirm completion of job requests.")
 
         # Cleaner status transitions
         elif role == "cleaner":
@@ -418,7 +505,7 @@ class JobRequestService:
             else:
                 valid_transitions = {
                     JobStatus.confirmed: [JobStatus.in_progress, JobStatus.cancelled],
-                    JobStatus.in_progress: [JobStatus.completed],
+                    JobStatus.in_progress: [JobStatus.cleaner_completed],
                 }
 
                 allowed_statuses = valid_transitions.get(current_status, [])
@@ -432,13 +519,68 @@ class JobRequestService:
         job_request.status = new_status_enum
         db.session.commit()
 
+        end_user = job_request.end_user
+        cleaner = job_request.cleaner
+
+        end_user_profile = (
+            UserProfile.query.filter_by(user_id=job_request.end_user_id).first()
+            if job_request.end_user_id else None
+        )
+        cleaner_profile = (
+            UserProfile.query.filter_by(user_id=job_request.cleaner_id).first()
+            if job_request.cleaner_id else None
+        )
+
+        end_user_name = (
+            f"{end_user_profile.first_name} {end_user_profile.last_name}".strip()
+            if end_user_profile else "Customer"
+        )
+        cleaner_name = (
+            f"{cleaner_profile.first_name} {cleaner_profile.last_name}".strip()
+            if cleaner_profile else "Cleaner"
+        )
+
+        if new_status_enum == JobStatus.confirmed:
+            if end_user and end_user.email:
+                EmailService.send_booking_confirmation_email(
+                    to_email=end_user.email,
+                    recipient_name=end_user_name,
+                    job_request=job_request,
+                    recipient_role="end_user"
+                )
+
+            if cleaner and cleaner.email:
+                EmailService.send_booking_confirmation_email(
+                    to_email=cleaner.email,
+                    recipient_name=cleaner_name,
+                    job_request=job_request,
+                    recipient_role="cleaner"
+                )
+
+        elif new_status_enum == JobStatus.cancelled:
+            if end_user and end_user.email:
+                EmailService.send_booking_cancellation_email(
+                    to_email=end_user.email,
+                    recipient_name=end_user_name,
+                    job_request=job_request,
+                    recipient_role="end_user"
+                )
+
+            if cleaner and cleaner.email:
+                EmailService.send_booking_cancellation_email(
+                    to_email=cleaner.email,
+                    recipient_name=cleaner_name,
+                    job_request=job_request,
+                    recipient_role="cleaner"
+                )
+
         return {
             "message": f"Job request status updated to {new_status}.",
             "job_request": job_request.to_dict()
         }
 
     @staticmethod
-    def get_cleaner_schedule(user_id: int) -> Dict[str, Any]:
+    def get_cleaner_schedule(user_id: int, page: int = 1, per_page: int = 25) -> Dict[str, Any]:
         """
         Return upcoming confirmed or in_progress jobs for a cleaner.
         Ordered by date then start time.
@@ -446,6 +588,7 @@ class JobRequestService:
         today = date.today()
         jobs = (
             JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
             .filter(
                 JobRequest.cleaner_id == user_id,
                 JobRequest.status.in_([JobStatus.confirmed, JobStatus.in_progress]),
@@ -453,26 +596,48 @@ class JobRequestService:
                 JobRequest.deleted_at.is_(None),
             )
             .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
-            .all()
         )
-        return {"schedule": [j.to_dict() for j in jobs]}
+        jobs, pagination = JobRequestService._paginate_query(jobs, page, per_page)
+        return {"schedule": [j.to_dict() for j in jobs], "pagination": pagination}
 
     @staticmethod
-    def get_available_jobs(user_id: int) -> Dict[str, Any]:
+    def get_available_jobs(user_id: int, page: int = 1, per_page: int = 25) -> Dict[str, Any]:
         """
         Return open (unassigned, pending) job requests that match the cleaner's
         service_type and fall within their availability slots.
         Excludes jobs in a priority window for a different cleaner.
         """
-        cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+        if page < 1:
+            raise ValueError("invalid_pagination|page must be at least 1.")
+        if per_page < 1:
+            raise ValueError("invalid_pagination|per_page must be at least 1.")
+        per_page = min(per_page, 100)
+
+        cleaner_profile = (
+            CleanerProfile.query
+            .options(joinedload(CleanerProfile.availability))
+            .filter_by(user_id=user_id)
+            .first()
+        )
         if not cleaner_profile:
-            return {"job_requests": []}
+            return {
+                "job_requests": [],
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": 0,
+                    "total_pages": 0,
+                    "has_prev": False,
+                    "has_next": False,
+                },
+            }
 
         today = date.today()
         now = datetime.now(timezone.utc)
 
-        jobs = (
+        jobs_query = (
             JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
             .filter(
                 JobRequest.status == JobStatus.pending,
                 JobRequest.service_type == cleaner_profile.service_type,
@@ -491,8 +656,8 @@ class JobRequestService:
                 ),
             )
             .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
-            .all()
         )
+        jobs = jobs_query.all()
 
         # If the cleaner has availability slots, only show jobs that fit within them.
         # If no slots are set, all matching jobs are shown.
@@ -500,7 +665,23 @@ class JobRequestService:
         if availability:
             jobs = [j for j in jobs if JobRequestService._job_fits_availability(j, availability)]
 
-        return {"job_requests": [j.to_dict() for j in jobs]}
+        total = len(jobs)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paged_jobs = jobs[start:end]
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return {
+            "job_requests": [j.to_dict() for j in paged_jobs],
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            },
+        }
 
     @staticmethod
     def _job_fits_availability(job, slots) -> bool:

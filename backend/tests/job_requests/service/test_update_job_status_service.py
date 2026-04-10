@@ -247,11 +247,11 @@ def test_cleaner_invalid_transition(mocker):
 
 
 def test_cleaner_complete_job_success(mocker):
-    """Cleaner can mark an in_progress job as completed."""
+    """Cleaner can mark an in_progress job as cleaner_completed."""
     mock_job_request = mocker.Mock()
     mock_job_request.cleaner_id = 5
     mock_job_request.status = JobStatus.in_progress
-    mock_job_request.to_dict.return_value = {"id": 1, "status": "completed"}
+    mock_job_request.to_dict.return_value = {"id": 1, "status": "cleaner_completed"}
 
     mock_query = mocker.Mock()
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
@@ -259,8 +259,8 @@ def test_cleaner_complete_job_success(mocker):
     mocker.patch("app.services.job_request_service.db.session")
 
     result = JobRequestService.update_job_status(
-        job_request_id=1, user_id=5, role="cleaner", new_status="completed"
+        job_request_id=1, user_id=5, role="cleaner", new_status="cleaner_completed"
     )
 
     assert "completed" in result["message"]
-    assert mock_job_request.status == JobStatus.completed
+    assert mock_job_request.status == JobStatus.cleaner_completed

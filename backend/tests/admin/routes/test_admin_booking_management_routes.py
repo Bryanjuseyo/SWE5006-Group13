@@ -53,6 +53,8 @@ def test_admin_get_bookings_with_filters(client, patch_decode_token, bearer_head
     bookings_mock.assert_called_once_with(
         status_filter="confirmed",
         search="kitchen",
+        page=1,
+        per_page=25,
     )
 
 

@@ -198,6 +198,8 @@ def test_admin_get_users_with_filters(client, patch_decode_token, bearer_header,
         role_filter="cleaner",
         banned_filter="true",
         search="john",
+        page=1,
+        per_page=25,
     )
 
 

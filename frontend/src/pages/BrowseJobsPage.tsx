@@ -2,7 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getToken, getUser } from '../auth/storage';
-import { getAvailableJobs, updateJobStatus, type JobRequest } from '../api/job_requests';
+import {
+  getAvailableJobs,
+  updateJobStatus,
+  type JobRequest,
+  type PaginationMeta,
+} from '../api/job_requests';
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString(undefined, {
@@ -29,26 +34,30 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export default function BrowseJobsPage() {
+  const JOBS_PER_PAGE = 25;
   const token = getToken();
   const currentUser = getUser();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobRequest[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getAvailableJobs(token!);
+      const res = await getAvailableJobs(token!, page, JOBS_PER_PAGE);
       setJobs(res.job_requests);
+      setPagination(res.pagination);
     } catch (e: unknown) {
       setError(getErrorMessage(e, 'Failed to load available jobs.'));
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, page]);
 
   useEffect(() => {
     void load();
@@ -88,6 +97,7 @@ export default function BrowseJobsPage() {
             No available jobs matching your service type right now. Check back later.
           </div>
         ) : (
+          <>
           <div className="d-flex flex-column gap-3">
             {jobs.map((job) => (
               <div key={job.id} className="card shadow-sm">
@@ -144,6 +154,35 @@ export default function BrowseJobsPage() {
               </div>
             ))}
           </div>
+          {pagination && (
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-4">
+              <div className="text-muted small">
+                Showing {(pagination.page - 1) * pagination.per_page + 1}-
+                {Math.min(pagination.page * pagination.per_page, pagination.total)} of{' '}
+                {pagination.total} available jobs
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={!pagination.has_prev}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                >
+                  Previous
+                </button>
+                <span className="small text-muted">
+                  Page {pagination.page} of {Math.max(pagination.total_pages, 1)}
+                </span>
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={!pagination.has_next}
+                  onClick={() => setPage((prev) => prev + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </main>
     </>
