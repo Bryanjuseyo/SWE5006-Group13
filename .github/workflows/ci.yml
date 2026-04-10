@@ -115,11 +115,6 @@ jobs:
         ports:
           - 2525:2525
           - 37408:8080
-        options: >-
-          --health-cmd="wget -qO- http://localhost:8080/api/messages || exit 1"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
 
     steps:
       - uses: actions/checkout@v4
@@ -161,6 +156,7 @@ jobs:
       - name: Wait for services
         run: |
           npx wait-on http://localhost:5000/api/health http://localhost:5173 tcp:localhost:37408 --timeout 60000
+          sleep 3
 
       - name: Install E2E dependencies and browsers
         working-directory: ./e2e
