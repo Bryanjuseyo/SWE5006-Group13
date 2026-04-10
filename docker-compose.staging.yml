@@ -45,7 +45,7 @@ services:
       - backend
     restart: always
 
-    papercut:
+  papercut:
     image: changemakerstudiosus/papercut-smtp:latest
     ports:
       - "2525:2525"   # SMTP
