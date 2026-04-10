@@ -36,6 +36,8 @@ const MOCK_BOOKING: JobRequest = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
+const MOCK_PAGINATION = { page: 1, per_page: 10, total: 0, total_pages: 0, has_prev: false, has_next: false };
+
 describe('AdminBookingsPage', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -46,7 +48,7 @@ describe('AdminBookingsPage', () => {
   });
 
   it('renders the page heading', async () => {
-    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [] });
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminBookingsPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Manage Bookings')).toBeInTheDocument();
@@ -54,7 +56,7 @@ describe('AdminBookingsPage', () => {
   });
 
   it('renders booking rows in the table', async () => {
-    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [MOCK_BOOKING] });
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [MOCK_BOOKING], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminBookingsPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Weekly Cleaning')).toBeInTheDocument();
@@ -62,7 +64,7 @@ describe('AdminBookingsPage', () => {
   });
 
   it('shows empty state when no bookings found', async () => {
-    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [] });
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminBookingsPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText(/no bookings found/i)).toBeInTheDocument();

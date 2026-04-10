@@ -42,6 +42,8 @@ const MOCK_JOB: jobRequestsApi.JobRequest = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
+const MOCK_PAGINATION = { page: 1, per_page: 10, total: 0, total_pages: 0, has_prev: false, has_next: false };
+
 describe('BrowseJobsPage', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -54,7 +56,7 @@ describe('BrowseJobsPage', () => {
 
   it('renders job cards after fetch', async () => {
     vi.mocked(storage.getUser).mockReturnValue({ id: 2, email: 'c@test.com', role: 'cleaner', created_at: '' });
-    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [MOCK_JOB] });
+    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [MOCK_JOB], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Office Deep Clean')).toBeInTheDocument();
@@ -63,7 +65,7 @@ describe('BrowseJobsPage', () => {
 
   it('shows empty state when no jobs available', async () => {
     vi.mocked(storage.getUser).mockReturnValue({ id: 2, email: 'c@test.com', role: 'cleaner', created_at: '' });
-    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [] });
+    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText(/no available jobs/i)).toBeInTheDocument();
@@ -81,7 +83,7 @@ describe('BrowseJobsPage', () => {
 
   it('renders the page heading', async () => {
     vi.mocked(storage.getUser).mockReturnValue({ id: 2, email: 'c@test.com', role: 'cleaner', created_at: '' });
-    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [] });
+    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Available Jobs')).toBeInTheDocument();

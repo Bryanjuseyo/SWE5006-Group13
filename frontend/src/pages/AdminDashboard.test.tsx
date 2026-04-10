@@ -21,6 +21,8 @@ const MOCK_STATS: adminApi.DashboardStats = {
   jobs: { total: 5, pending: 2, confirmed: 1, in_progress: 1, completed: 1, cancelled: 0, rejected: 0 },
 };
 
+const MOCK_PAGINATION = { page: 1, per_page: 10, total: 0, total_pages: 0, has_prev: false, has_next: false };
+
 describe('AdminDashboard', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -33,7 +35,7 @@ describe('AdminDashboard', () => {
 
   it('renders the Admin Dashboard heading', async () => {
     vi.mocked(adminApi.getAdminStats).mockResolvedValue(MOCK_STATS);
-    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [] });
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminDashboard /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
@@ -42,7 +44,7 @@ describe('AdminDashboard', () => {
 
   it('renders stats cards with user counts', async () => {
     vi.mocked(adminApi.getAdminStats).mockResolvedValue(MOCK_STATS);
-    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [] });
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminDashboard /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Total Users')).toBeInTheDocument();
@@ -60,7 +62,7 @@ describe('AdminDashboard', () => {
 
   it('renders Manage Users and Manage Bookings nav cards', async () => {
     vi.mocked(adminApi.getAdminStats).mockResolvedValue(MOCK_STATS);
-    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [] });
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminDashboard /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Manage Users')).toBeInTheDocument();

@@ -49,6 +49,8 @@ const MOCK_JOB: jobRequestsApi.JobRequest = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
+const MOCK_PAGINATION = { page: 1, per_page: 10, total: 0, total_pages: 0, has_prev: false, has_next: false };
+
 describe('JobRequestList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -67,7 +69,7 @@ describe('JobRequestList', () => {
   it('renders a job card for each returned job request', async () => {
     vi.mocked(storage.getUser).mockReturnValue(MOCK_END_USER);
     vi.mocked(jobRequestsApi.getJobRequests).mockResolvedValue({
-      job_requests: [MOCK_JOB],
+      job_requests: [MOCK_JOB], pagination: MOCK_PAGINATION,
     });
 
     render(<MemoryRouter><JobRequestList /></MemoryRouter>);
@@ -80,7 +82,7 @@ describe('JobRequestList', () => {
 
   it('shows empty state message when there are no job requests', async () => {
     vi.mocked(storage.getUser).mockReturnValue(MOCK_END_USER);
-    vi.mocked(jobRequestsApi.getJobRequests).mockResolvedValue({ job_requests: [] });
+    vi.mocked(jobRequestsApi.getJobRequests).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
 
     render(<MemoryRouter><JobRequestList /></MemoryRouter>);
 
@@ -91,7 +93,7 @@ describe('JobRequestList', () => {
 
   it('shows the New Job Request button for end_user role', async () => {
     vi.mocked(storage.getUser).mockReturnValue(MOCK_END_USER);
-    vi.mocked(jobRequestsApi.getJobRequests).mockResolvedValue({ job_requests: [] });
+    vi.mocked(jobRequestsApi.getJobRequests).mockResolvedValue({ job_requests: [], pagination: MOCK_PAGINATION });
 
     render(<MemoryRouter><JobRequestList /></MemoryRouter>);
 

@@ -28,6 +28,8 @@ const MOCK_USER: adminApi.AdminUser = {
   profile: null,
 };
 
+const MOCK_PAGINATION = { page: 1, per_page: 10, total: 0, total_pages: 0, has_prev: false, has_next: false };
+
 describe('AdminUsersPage', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -38,7 +40,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('renders the page heading', async () => {
-    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [] });
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Manage Users')).toBeInTheDocument();
@@ -46,7 +48,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('renders user rows after fetch', async () => {
-    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [MOCK_USER] });
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [MOCK_USER], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('user@test.com')).toBeInTheDocument();
@@ -54,7 +56,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('shows empty state when no users found', async () => {
-    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [] });
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText(/no users found/i)).toBeInTheDocument();

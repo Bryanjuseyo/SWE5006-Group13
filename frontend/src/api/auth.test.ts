@@ -35,7 +35,7 @@ describe('auth API', () => {
 
   it('verify2FA sends POST to /api/auth/2fa/verify with temp_token and otp', async () => {
     const fetchMock = mockFetch(200, { token: 'jwt' });
-    await verify2FA({ temp_token: 'tmp', otp: '123456' });
+    await verify2FA('123456', 'tmp');
     const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/auth/2fa/verify');
     expect(opts.method).toBe('POST');

@@ -35,6 +35,8 @@ const MOCK_JOB: jobRequestsApi.JobRequest = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
+const MOCK_PAGINATION = { page: 1, per_page: 10, total: 0, total_pages: 0, has_prev: false, has_next: false };
+
 describe('CleanerSchedulePage', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -45,7 +47,7 @@ describe('CleanerSchedulePage', () => {
   });
 
   it('renders job cards after fetch', async () => {
-    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB] });
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Morning Clean')).toBeInTheDocument();
@@ -53,7 +55,7 @@ describe('CleanerSchedulePage', () => {
   });
 
   it('shows empty state when no jobs scheduled', async () => {
-    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [] });
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText(/no upcoming jobs/i)).toBeInTheDocument();
@@ -69,7 +71,7 @@ describe('CleanerSchedulePage', () => {
   });
 
   it('renders Start Job button for confirmed jobs', async () => {
-    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB] });
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB], pagination: MOCK_PAGINATION });
     render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /start job/i })).toBeInTheDocument();

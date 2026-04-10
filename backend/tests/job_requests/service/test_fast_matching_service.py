@@ -10,12 +10,13 @@ Each assertion uses a 3-second upper bound (matching the acceptance criterion)
 with a conservative 2-second wall-clock budget to leave headroom for CI.
 """
 import time
-from datetime import date, time as dtime
+from datetime import date
 from decimal import Decimal
 
-import pytest
-
-from app.models import db, User, UserProfile, CleanerProfile, CleanerAvailability, JobRequest, UserRole, ServiceType, JobStatus
+from app.models import (
+    db, User, UserProfile, CleanerProfile, CleanerAvailability,
+    JobRequest, UserRole, ServiceType, JobStatus
+)
 
 PERF_BUDGET_SECONDS = 2.0   # stricter than the 3 s acceptance criterion
 

@@ -7,7 +7,6 @@ from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, C
 from app.services.email_service import EmailService
 
 
-
 class JobRequestService:
     @staticmethod
     def _paginate_query(query, page: int, per_page: int):

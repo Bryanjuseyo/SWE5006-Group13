@@ -8,8 +8,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app import create_app
-from app.models import db, User, UserRole, UserProfile, CleanerProfile, ServiceType
+from app import create_app  # noqa: E402
+from app.models import db, User, UserRole, UserProfile, CleanerProfile, ServiceType  # noqa: E402
 
 PASSWORD = "Password1"
 
@@ -112,7 +112,6 @@ def seed():
         print(f"End users  — created: {created_end_users}, skipped (already exist): {skipped_end_users}")
         print(f"Cleaners   — created: {created_cleaners}, skipped (already exist): {skipped_cleaners}")
         print()
-
 
 
 if __name__ == "__main__":

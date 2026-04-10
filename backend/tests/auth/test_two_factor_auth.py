@@ -15,8 +15,7 @@ Routes under test:
   POST /api/auth/2fa/verify   — verify login OTP (completes 2FA login flow)
 """
 import pytest
-from datetime import datetime, timezone, timedelta
-from jwt import ExpiredSignatureError, InvalidTokenError
+from jwt import ExpiredSignatureError
 
 
 ALL_ROLES = ["end_user", "cleaner", "administrator"]
@@ -24,6 +23,7 @@ ALL_ROLES = ["end_user", "cleaner", "administrator"]
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _auth_headers(patch_decode_token, bearer_header, user_id=1, role="end_user"):
     patch_decode_token(payload={"user_id": user_id, "email": "u@test.com", "role": role})
