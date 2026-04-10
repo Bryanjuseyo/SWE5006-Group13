@@ -3,7 +3,10 @@ from datetime import datetime, date, timedelta, timezone
 
 from sqlalchemy import or_, and_, false
 from sqlalchemy.orm import joinedload
-from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile, PRIORITY_WINDOW_HOURS
+from app.models import (
+    db, JobRequest, JobStatus, ServiceType, User, UserRole,
+    UserProfile, CleanerProfile, PRIORITY_WINDOW_HOURS
+)
 from app.services.email_service import EmailService
 
 
@@ -516,17 +519,17 @@ class JobRequestService:
         job_request.status = new_status_enum
         db.session.commit()
 
-        # Re-fetch with eager-loaded relationships to avoid lazy-load queries.
-        job_request = JobRequestService._get_job_request_with_relationships(
-            job_request.id,
-            include_user_profiles=True,
-        )
-
         end_user = job_request.end_user
         cleaner = job_request.cleaner
 
-        end_user_profile = end_user.profile if end_user else None
-        cleaner_profile = cleaner.profile if cleaner else None
+        end_user_profile = (
+            UserProfile.query.filter_by(user_id=job_request.end_user_id).first()
+            if job_request.end_user_id else None
+        )
+        cleaner_profile = (
+            UserProfile.query.filter_by(user_id=job_request.cleaner_id).first()
+            if job_request.cleaner_id else None
+        )
 
         end_user_name = (
             f"{end_user_profile.first_name} {end_user_profile.last_name}".strip()

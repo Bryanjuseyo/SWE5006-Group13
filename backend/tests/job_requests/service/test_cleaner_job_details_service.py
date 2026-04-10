@@ -51,7 +51,7 @@ def _make_mock_job(mocker, *, cleaner_id=None, status=JobStatus.pending,
 
 def _patch_query(mocker, mock_job):
     q = mocker.Mock()
-    q.filter_by.return_value.filter.return_value.first.return_value = mock_job
+    q.options.return_value.filter_by.return_value.filter.return_value.first.return_value = mock_job
     mocker.patch("app.services.job_request_service.JobRequest.query", q)
 
 
@@ -111,7 +111,7 @@ def test_cleaner_cannot_view_soft_deleted_job(mocker):
     # Soft-deleted jobs are filtered out in the DB query (deleted_at IS NULL),
     # so the query returns None — simulated here by returning None from the mock.
     q = mocker.Mock()
-    q.filter_by.return_value.filter.return_value.first.return_value = None
+    q.options.return_value.filter_by.return_value.filter.return_value.first.return_value = None
     mocker.patch("app.services.job_request_service.JobRequest.query", q)
 
     with pytest.raises(ValueError) as exc:
