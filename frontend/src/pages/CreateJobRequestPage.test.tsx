@@ -3,9 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import CreateJobRequestPage from './CreateJobRequestPage';
-import * as jobRequestsApi from '../api/job_requests';
 import * as cleanersApi from '../api/cleaners';
-import * as adminApi from '../api/admin';
 import * as storage from '../auth/storage';
 
 vi.mock('../api/job_requests', () => ({

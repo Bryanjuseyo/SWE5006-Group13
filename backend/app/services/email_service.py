@@ -10,7 +10,7 @@ class EmailService:
         host = current_app.config.get("SMTP_HOST", "")
 
         if not host:
-            print(f"\n[EMAIL SERVICE - DEV FALLBACK]")
+            print("\n[EMAIL SERVICE - DEV FALLBACK]")
             print(f"To: {to_email}")
             print(f"Subject: {subject}")
             print(text)
@@ -43,11 +43,11 @@ class EmailService:
         host = current_app.config.get("SMTP_HOST", "")
 
         if not host:
-            print(f"\n[EMAIL SERVICE - DEV FALLBACK]")
+            print("\n[EMAIL SERVICE - DEV FALLBACK]")
             print(f"  To:      {to_email}")
             print(f"  Purpose: {purpose}")
             print(f"  OTP:     {otp}")
-            print(f"[END EMAIL]\n")
+            print("[END EMAIL]\n")
             return
 
         port = current_app.config.get("SMTP_PORT", 587)

@@ -6,6 +6,7 @@ from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, C
 from app.services.email_service import EmailService
 from app.models import UserProfile
 
+
 class JobRequestService:
     @staticmethod
     def create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
