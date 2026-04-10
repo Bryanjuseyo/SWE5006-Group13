@@ -13,7 +13,7 @@
 
 import type { APIRequestContext } from '@playwright/test';
 
-const PAPERCUT_BASE = 'http://localhost:37408';
+const PAPERCUT_BASE = process.env.PAPERCUT_BASE ?? 'http://localhost:37408';
 
 /**
  * Delete all emails in Papercut so each test starts with a clean inbox.
