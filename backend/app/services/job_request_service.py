@@ -5,6 +5,7 @@ from sqlalchemy import or_, and_, false
 from sqlalchemy.orm import joinedload
 from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile, PRIORITY_WINDOW_HOURS
 from app.services.email_service import EmailService
+from app.services.job_request_states import JobRequestStateFactory
 
 
 class JobRequestService:
@@ -445,82 +446,27 @@ class JobRequestService:
             valid = ", ".join([s.value for s in JobStatus])
             raise ValueError(f"invalid_status|status must be one of: {valid}.")
 
-        current_status = job_request.status
+        state = JobRequestStateFactory.get_state(job_request.status)
+        transition = state.transition(job_request, user_id, role, new_status_enum)
 
-        # End user status transitions
-        if role == "end_user":
-            if job_request.end_user_id != user_id:
-                raise ValueError("forbidden|You are not authorized to update this job request.")
+        if transition.status is not None:
+            job_request.status = transition.status
 
-            if new_status_enum == JobStatus.completed:
-                # End user can confirm completion only after cleaner has marked it done
-                if current_status != JobStatus.cleaner_completed:
-                    raise ValueError(
-                        "invalid_status|Can only confirm completion after the cleaner has marked the job as done."
-                    )
-            elif new_status_enum == JobStatus.cancelled:
-                if job_request.cleaner_id is None:
-                    raise ValueError(
-                        "forbidden|Cannot cancel a job request that has not been assigned to a cleaner."
-                    )
-                if current_status not in [JobStatus.pending, JobStatus.confirmed]:
-                    raise ValueError(
-                        "invalid_status|Can only cancel pending or confirmed job requests."
-                    )
-            else:
-                raise ValueError("forbidden|End users can only cancel or confirm completion of job requests.")
-
-        # Cleaner status transitions
-        elif role == "cleaner":
-            is_open_pending = current_status == JobStatus.pending
-
-            if is_open_pending:
-                if new_status_enum == JobStatus.cancelled:
-                    # Preferred cleaner is declining during priority window
-                    if job_request.cleaner_id == user_id:
-                        job_request.cleaner_id = None
-                        job_request.priority_window_end = None
-                        db.session.commit()
-                        return {
-                            "message": "You have declined this job. It is now open to all cleaners.",
-                            "job_request": job_request.to_dict()
-                        }
-                    else:
-                        raise ValueError(
-                            "forbidden|You are not authorized to decline this job request."
-                        )
-                elif new_status_enum != JobStatus.confirmed:
-                    raise ValueError(
-                        "invalid_status|Can only confirm (accept) a pending job."
-                    )
-                else:
-                    # Cleaner is accepting the job
-                    job_request.cleaner_id = user_id
-                    job_request.priority_window_end = None
-            elif job_request.cleaner_id != user_id:
-                raise ValueError("forbidden|You are not authorized to update this job request.")
-            else:
-                valid_transitions = {
-                    JobStatus.confirmed: [JobStatus.in_progress, JobStatus.cancelled],
-                    JobStatus.in_progress: [JobStatus.cleaner_completed],
-                }
-
-                allowed_statuses = valid_transitions.get(current_status, [])
-                if new_status_enum not in allowed_statuses:
-                    allowed_values = ", ".join([s.value for s in allowed_statuses])
-                    raise ValueError(
-                        f"invalid_status|Cannot transition from {current_status.value} to {new_status}. "
-                        f"Allowed: {allowed_values}."
-                    )
-
-        job_request.status = new_status_enum
         db.session.commit()
+
+        if transition.return_immediately:
+            return {
+                "message": transition.message,
+                "job_request": job_request.to_dict()
+            }
 
         # Re-fetch with eager-loaded relationships to avoid lazy-load queries.
         job_request = JobRequestService._get_job_request_with_relationships(
             job_request.id,
             include_user_profiles=True,
         )
+
+        final_status = transition.status or job_request.status
 
         end_user = job_request.end_user
         cleaner = job_request.cleaner
@@ -537,7 +483,7 @@ class JobRequestService:
             if cleaner_profile else "Cleaner"
         )
 
-        if new_status_enum == JobStatus.confirmed:
+        if final_status == JobStatus.confirmed:
             if end_user and end_user.email:
                 EmailService.send_booking_confirmation_email(
                     to_email=end_user.email,
@@ -554,7 +500,7 @@ class JobRequestService:
                     recipient_role="cleaner"
                 )
 
-        elif new_status_enum == JobStatus.cancelled:
+        elif final_status == JobStatus.cancelled:
             if end_user and end_user.email:
                 EmailService.send_booking_cancellation_email(
                     to_email=end_user.email,

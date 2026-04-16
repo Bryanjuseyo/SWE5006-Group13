@@ -577,3 +577,64 @@ def test_auto_assign_cleaner_raises_no_match(app):
             match=r"no_match\|No suitable cleaners found for this job\.",
         ):
             MatchingService.auto_assign_cleaner(job.id, end_user.id, "end_user")
+
+
+def test_find_matching_cleaners_supports_lowest_price_strategy(app):
+    with app.app_context():
+        end_user = create_user("owner11@test.com", UserRole.end_user)
+        job = create_job(
+            end_user.id,
+            service_type=ServiceType.partial,
+            status=JobStatus.pending,
+            preferred_date=date(2026, 3, 28),
+        )
+
+        cheaper_cleaner = create_user("cheap@test.com", UserRole.cleaner)
+        create_user_profile(cheaper_cleaner.id, "Cheap", "Cleaner")
+        create_cleaner_profile(
+            cheaper_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("20.00"),
+            years_experience=1,
+        )
+
+        experienced_cleaner = create_user("expensive@test.com", UserRole.cleaner)
+        create_user_profile(experienced_cleaner.id, "Experienced", "Cleaner")
+        create_cleaner_profile(
+            experienced_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("60.00"),
+            years_experience=10,
+        )
+
+        result = MatchingService.find_matching_cleaners(
+            job.id,
+            end_user.id,
+            "end_user",
+            strategy_name="lowest_price",
+        )
+
+        assert result["strategy"] == "lowest_price"
+        assert result["matches"][0]["cleaner_id"] == cheaper_cleaner.id
+
+
+def test_find_matching_cleaners_raises_invalid_strategy(app):
+    with app.app_context():
+        end_user = create_user("owner12@test.com", UserRole.end_user)
+        job = create_job(
+            end_user.id,
+            service_type=ServiceType.partial,
+            status=JobStatus.pending,
+            preferred_date=date(2026, 3, 28),
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"invalid_strategy\|strategy must be one of:",
+        ):
+            MatchingService.find_matching_cleaners(
+                job.id,
+                end_user.id,
+                "end_user",
+                strategy_name="unknown",
+            )
