@@ -21,7 +21,7 @@ atexit.register(_container.stop)
 
 from app.models import db as _db  # noqa: E402
 from app import create_app  # noqa: E402
-from auth.test_routes import register_auth_test_routes # noqa: E402
+from auth.test_routes import register_auth_test_routes  # noqa: E402
 
 
 @pytest.fixture(scope="session")

@@ -3,7 +3,10 @@ from datetime import datetime, date, timedelta, timezone
 
 from sqlalchemy import or_, and_, false
 from sqlalchemy.orm import joinedload
-from app.models import db, JobRequest, JobStatus, ServiceType, User, UserRole, CleanerProfile, PRIORITY_WINDOW_HOURS
+from app.models import (
+    db, JobRequest, JobStatus, ServiceType, User, UserRole,
+    CleanerProfile, PRIORITY_WINDOW_HOURS
+)
 from app.services.email_service import EmailService
 from app.services.job_request_states import JobRequestStateFactory
 
@@ -467,7 +470,6 @@ class JobRequestService:
         )
 
         final_status = transition.status or job_request.status
-
         end_user = job_request.end_user
         cleaner = job_request.cleaner
 
