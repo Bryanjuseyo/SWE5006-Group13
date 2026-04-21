@@ -8,6 +8,16 @@ from app.services.jwt_service import generate_token, generate_2fa_temp_token
 from app.services.two_factor_service import TwoFactorService
 from app.services.email_service import EmailService
 
+from app.services.auth_login_handlers import (
+    LoginContext,
+    RequiredCredentialsHandler,
+    UserExistsHandler,
+    BannedUserHandler,
+    LockedUserHandler,
+    PasswordCheckHandler,
+    TwoFactorLoginHandler,
+)
+
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PHONE_RE = re.compile(r"^[89]\d{7}$")
 LOCKOUT_THRESHOLD = 5
@@ -117,58 +127,20 @@ class AuthService:
     # =============================================
     # LOGIN USER
     # =============================================
+    @staticmethod
     def login_user(email: str, password: str):
-        email = (email or "").strip().lower()
-        password = password or ""
+        context = LoginContext(email, password)
 
-        if not email or not password:
-            raise ValueError("invalid_credentials|Email and password are required.")
+        chain = RequiredCredentialsHandler(
+            UserExistsHandler(
+                BannedUserHandler(
+                    LockedUserHandler(
+                        PasswordCheckHandler(
+                            TwoFactorLoginHandler()
+                        )
+                    )
+                )
+            )
+        )
 
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            raise ValueError("invalid_credentials|Invalid email or password.")
-
-        now = datetime.now(timezone.utc)
-
-        # Check if user is banned
-        if user.is_banned:
-            raise ValueError("banned|Your account has been banned. Contact support for assistance.")
-
-        # Check user locked
-        if user.locked_until and user.locked_until > now:
-            raise ValueError("locked|Too many failed attempts. Try again later.")
-
-        # Check Password
-        if not user.check_password(password):
-            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-
-            if user.failed_login_attempts >= LOCKOUT_THRESHOLD:
-                user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
-
-            db.session.commit()
-            raise ValueError("invalid_credentials|Invalid email or password.")
-
-        # Success — reset lockout state
-        user.failed_login_attempts = 0
-        user.locked_until = None
-        db.session.commit()
-
-        # Skip 2FA for testing
-        from flask import current_app
-        if current_app.config.get("SKIP_2FA"):
-            user.last_login_at = datetime.now(timezone.utc)
-            db.session.commit()
-            token = generate_token(user.id, user.email, user.role.value)
-            return {"token": token, "user": user.to_dict()}
-
-        # Always require OTP verification. For existing users who predate 2FA,
-        # two_factor_enabled may be False — we still send the OTP and will set
-        # it to True once they verify, bringing them onto the 2FA flow.
-        otp = TwoFactorService.generate_and_store_otp(user)
-        EmailService.send_otp_email(user.email, otp, "login verification")
-        temp_token = generate_2fa_temp_token(user.id)
-        return {
-            "requires_2fa": True,
-            "temp_token": temp_token,
-            "message": "OTP sent to your email. Please enter it to complete login.",
-        }
+        return chain.handle(context)
