@@ -7,8 +7,9 @@ from app.models import (
     db, JobRequest, JobStatus, ServiceType, User, UserRole,
     CleanerProfile, PRIORITY_WINDOW_HOURS
 )
-from app.services.email_service import EmailService
 from app.services.job_request_states import JobRequestStateFactory
+from app.services.job_event_publisher import JobEventPublisher
+from app.services.job_event_listeners import EmailNotificationListener
 
 
 class JobRequestService:
@@ -67,6 +68,12 @@ class JobRequestService:
             .filter_by(id=job_request_id)
             .first()
         )
+    
+    @staticmethod
+    def _build_job_event_publisher():
+        publisher = JobEventPublisher()
+        publisher.subscribe(EmailNotificationListener())
+        return publisher
 
     @staticmethod
     def create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
@@ -470,54 +477,12 @@ class JobRequestService:
         )
 
         final_status = transition.status or job_request.status
-        end_user = job_request.end_user
-        cleaner = job_request.cleaner
-
-        end_user_profile = end_user.profile if end_user else None
-        cleaner_profile = cleaner.profile if cleaner else None
-
-        end_user_name = (
-            f"{end_user_profile.first_name} {end_user_profile.last_name}".strip()
-            if end_user_profile else "Customer"
-        )
-        cleaner_name = (
-            f"{cleaner_profile.first_name} {cleaner_profile.last_name}".strip()
-            if cleaner_profile else "Cleaner"
-        )
+        publisher = JobRequestService._build_job_event_publisher()
 
         if final_status == JobStatus.confirmed:
-            if end_user and end_user.email:
-                EmailService.send_booking_confirmation_email(
-                    to_email=end_user.email,
-                    recipient_name=end_user_name,
-                    job_request=job_request,
-                    recipient_role="end_user"
-                )
-
-            if cleaner and cleaner.email:
-                EmailService.send_booking_confirmation_email(
-                    to_email=cleaner.email,
-                    recipient_name=cleaner_name,
-                    job_request=job_request,
-                    recipient_role="cleaner"
-                )
-
+            publisher.notify("job_confirmed", job_request)
         elif final_status == JobStatus.cancelled:
-            if end_user and end_user.email:
-                EmailService.send_booking_cancellation_email(
-                    to_email=end_user.email,
-                    recipient_name=end_user_name,
-                    job_request=job_request,
-                    recipient_role="end_user"
-                )
-
-            if cleaner and cleaner.email:
-                EmailService.send_booking_cancellation_email(
-                    to_email=cleaner.email,
-                    recipient_name=cleaner_name,
-                    job_request=job_request,
-                    recipient_role="cleaner"
-                )
+            publisher.notify("job_cancelled", job_request)
 
         return {
             "message": f"Job request status updated to {new_status}.",
