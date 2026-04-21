@@ -7,6 +7,13 @@ from app.models import (
     db, JobRequest, JobStatus, ServiceType, User, UserRole,
     CleanerProfile, PRIORITY_WINDOW_HOURS
 )
+from app.services.job_request_commands import (
+    CreateJobRequestCommand,
+    DeleteJobRequestCommand,
+    JobRequestCommandInvoker,
+    UpdateJobRequestCommand,
+    UpdateJobStatusCommand,
+)
 from app.services.job_request_states import JobRequestStateFactory
 from app.services.job_event_publisher import JobEventPublisher
 from app.services.job_event_listeners import EmailNotificationListener
@@ -77,6 +84,11 @@ class JobRequestService:
 
     @staticmethod
     def create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
+        command = CreateJobRequestCommand(end_user_id, data)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
         """
         Create a new job request
         """
@@ -179,6 +191,16 @@ class JobRequestService:
 
     @staticmethod
     def update_job_request(
+        job_request_id: int,
+        user_id: int,
+        role: str,
+        data: dict
+    ) -> Dict[str, Any]:
+        command = UpdateJobRequestCommand(job_request_id, user_id, role, data)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _update_job_request(
         job_request_id: int,
         user_id: int,
         role: str,
@@ -298,6 +320,11 @@ class JobRequestService:
 
     @staticmethod
     def delete_job_request(job_request_id: int, user_id: int, role: str) -> Dict[str, Any]:
+        command = DeleteJobRequestCommand(job_request_id, user_id, role)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _delete_job_request(job_request_id: int, user_id: int, role: str) -> Dict[str, Any]:
         """
         Delete a job request.
         Only the end user who created the request can delete it.
@@ -434,6 +461,16 @@ class JobRequestService:
 
     @staticmethod
     def update_job_status(
+        job_request_id: int,
+        user_id: int,
+        role: str,
+        new_status: str
+    ) -> Dict[str, Any]:
+        command = UpdateJobStatusCommand(job_request_id, user_id, role, new_status)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _update_job_status(
         job_request_id: int,
         user_id: int,
         role: str,
