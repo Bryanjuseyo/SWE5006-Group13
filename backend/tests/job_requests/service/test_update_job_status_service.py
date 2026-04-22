@@ -98,7 +98,7 @@ def test_end_user_cancel_with_cleaner_success(mocker):
         "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
         return_value=mock_job_request,
     )
-    mocker.patch("app.services.job_request_service.EmailService.send_booking_cancellation_email")
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_cancellation_email")
 
     result = JobRequestService.update_job_status(
         job_request_id=1, user_id=1, role="end_user", new_status="cancelled"
@@ -127,7 +127,7 @@ def test_cleaner_claim_unassigned_job_success(mocker):
         "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
         return_value=mock_job_request,
     )
-    mocker.patch("app.services.job_request_service.EmailService.send_booking_confirmation_email")
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_confirmation_email")
 
     result = JobRequestService.update_job_status(
         job_request_id=1, user_id=5, role="cleaner", new_status="confirmed"
@@ -221,7 +221,7 @@ def test_cleaner_cancel_confirmed_job_success(mocker):
         "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
         return_value=mock_job_request,
     )
-    mocker.patch("app.services.job_request_service.EmailService.send_booking_cancellation_email")
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_cancellation_email")
 
     result = JobRequestService.update_job_status(
         job_request_id=1,
