@@ -39,8 +39,8 @@ def _patch_query(mocker, mock_job):
         "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
         return_value=mock_job,
     )
-    mocker.patch("app.services.job_request_service.EmailService.send_booking_confirmation_email")
-    mocker.patch("app.services.job_request_service.EmailService.send_booking_cancellation_email")
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_confirmation_email")
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_cancellation_email")
 
 
 # ===========================================================================

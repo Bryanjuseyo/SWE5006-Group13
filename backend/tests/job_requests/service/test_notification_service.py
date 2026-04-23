@@ -136,7 +136,7 @@ class TestUS26EndUserBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -158,7 +158,7 @@ class TestUS26EndUserBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job, end_user_first="Alice", end_user_last="Smith")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -179,7 +179,7 @@ class TestUS26EndUserBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -201,7 +201,7 @@ class TestUS26EndUserBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -229,7 +229,7 @@ class TestUS27EndUserCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -251,7 +251,7 @@ class TestUS27EndUserCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job, end_user_first="Alice", end_user_last="Smith")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -275,7 +275,7 @@ class TestUS27EndUserCancellationNotification:
         mock_job.cleaner_id = CLEANER_ID  # preferred cleaner set
         _patch_job_query(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         result = JobRequestService.update_job_status(
@@ -294,7 +294,7 @@ class TestUS27EndUserCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -315,7 +315,7 @@ class TestUS27EndUserCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -343,7 +343,7 @@ class TestUS28CleanerBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -365,7 +365,7 @@ class TestUS28CleanerBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job, cleaner_first="Bob", cleaner_last="Jones")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -386,7 +386,7 @@ class TestUS28CleanerBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -408,7 +408,7 @@ class TestUS28CleanerBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -429,7 +429,7 @@ class TestUS28CleanerBookingConfirmation:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -455,7 +455,7 @@ class TestUS29CleanerCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -477,7 +477,7 @@ class TestUS29CleanerCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job, cleaner_first="Bob", cleaner_last="Jones")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -498,7 +498,7 @@ class TestUS29CleanerCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -520,7 +520,7 @@ class TestUS29CleanerCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -541,7 +541,7 @@ class TestUS29CleanerCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -560,10 +560,10 @@ class TestUS29CleanerCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_confirm = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
         mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -580,10 +580,10 @@ class TestUS29CleanerCancellationNotification:
         _patch_job_query(mocker, mock_job)
         _patch_profiles(mocker, mock_job)
         mock_cancel = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
         mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
