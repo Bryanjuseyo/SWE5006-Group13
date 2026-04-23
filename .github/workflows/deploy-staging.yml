@@ -61,11 +61,11 @@ jobs:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/cleanmatch-key.pem
+          printf "%s" "$EC2_SSH_KEY" > ~/.ssh/cleanmatch-key.pem
           chmod 600 ~/.ssh/cleanmatch-key.pem
 
       - name: Run Ansible playbook
         run: |
           ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
-            --extra-vars "ansible_ssh_private_key_file=~/.ssh/cleanmatch-key.pem" \
+            --extra-vars "ansible_ssh_private_key_file=~/.ssh/cleanmatch-key.pem ec2_host=${{ secrets.EC2_HOST }}" \
             --ssh-extra-args="-o StrictHostKeyChecking=no"
