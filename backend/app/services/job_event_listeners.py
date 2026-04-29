@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 
-from app.models import JobStatus
 from app.services.email_service import EmailService
 
 

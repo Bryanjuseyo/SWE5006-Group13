@@ -73,7 +73,9 @@ class BaseJobRequestState(ABC):
             "invalid_status|Can only confirm completion after the cleaner has marked the job as done."
         )
 
-    def _raise_invalid_transition(self, current_status: JobStatus, new_status: JobStatus, allowed_statuses: list[JobStatus]):
+    def _raise_invalid_transition(
+        self, current_status: JobStatus, new_status: JobStatus, allowed_statuses: list[JobStatus]
+    ):
         allowed_values = ", ".join([status.value for status in allowed_statuses])
         raise ValueError(
             f"invalid_status|Cannot transition from {current_status.value} to {new_status.value}. "

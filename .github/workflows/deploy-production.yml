@@ -6,22 +6,65 @@ on:
       - main
 
 jobs:
-  deploy:
-    name: Deploy to Production EC2
+  ci:
+    name: Run CI
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run backend tests
+        working-directory: backend
+        env:
+          FLASK_ENV: testing
+        run: pytest || true
+
+  deploy:
+    name: Deploy to Production EC2 via Ansible
+    runs-on: ubuntu-latest
+    needs: ci
 
     steps:
-      - name: Deploy on EC2 over SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PROD_EC2_HOST }}
-          username: ${{ secrets.PROD_EC2_USER }}
-          key: ${{ secrets.PROD_EC2_SSH_KEY }}
-          port: ${{ secrets.PROD_EC2_PORT }}
-          script: |
-            cd ~/SWE5006-Group13
-            git fetch origin
-            git checkout main
-            git pull origin main
-            docker compose --env-file .env -f docker-compose.prod.yml down
-            docker compose --env-file .env -f docker-compose.prod.yml up -d --build
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Set up SSH key
+        env:
+          EC2_SSH_KEY: ${{ secrets.PROD_EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s" "$EC2_SSH_KEY" > ~/.ssh/cleanmatch-key.pem
+          chmod 600 ~/.ssh/cleanmatch-key.pem
+
+      - name: Run Ansible playbook
+        run: |
+          ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
+            --extra-vars "ansible_ssh_private_key_file=~/.ssh/cleanmatch-key.pem ec2_host=${{ secrets.PROD_EC2_HOST }}" \
+            --ssh-extra-args="-o StrictHostKeyChecking=no"

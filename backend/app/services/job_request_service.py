@@ -75,7 +75,7 @@ class JobRequestService:
             .filter_by(id=job_request_id)
             .first()
         )
-    
+
     @staticmethod
     def _build_job_event_publisher():
         publisher = JobEventPublisher()
