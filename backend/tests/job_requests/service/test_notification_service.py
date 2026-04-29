@@ -6,7 +6,7 @@ US-27: End-user receives cancellation email when a cleaner cancels the booking.
 US-28: Cleaner receives booking confirmation email when their booking is confirmed.
 US-29: Cleaner receives cancellation email when an end-user cancels the booking.
 
-The tests mock the database layer (JobRequest.query, UserProfile.query, db.session)
+The tests mock the database layer (JobRequest.query, relationship reloads, db.session)
 and assert that EmailService is called with the correct arguments.
 """
 import pytest
@@ -39,11 +39,14 @@ def mock_pending_unassigned_job(mocker):
     mock_cleaner.email = CLEANER_EMAIL
 
     mock_job = mocker.Mock()
+    mock_job.id = 1
     mock_job.end_user_id = END_USER_ID
     mock_job.cleaner_id = None        # unassigned
     mock_job.status = JobStatus.pending
     mock_job.end_user = mock_end_user
     mock_job.cleaner = mock_cleaner   # relationship resolves after cleaner claims
+    mock_job.end_user.profile = None
+    mock_job.cleaner.profile = None
     mock_job.to_dict.return_value = {"id": 1, "status": "confirmed"}
 
     return mock_job, mock_end_user, mock_cleaner
@@ -61,11 +64,14 @@ def mock_confirmed_assigned_job(mocker):
     mock_cleaner.email = CLEANER_EMAIL
 
     mock_job = mocker.Mock()
+    mock_job.id = 1
     mock_job.end_user_id = END_USER_ID
     mock_job.cleaner_id = CLEANER_ID
     mock_job.status = JobStatus.confirmed
     mock_job.end_user = mock_end_user
     mock_job.cleaner = mock_cleaner
+    mock_job.end_user.profile = None
+    mock_job.cleaner.profile = None
     mock_job.to_dict.return_value = {"id": 1, "status": "cancelled"}
 
     return mock_job, mock_end_user, mock_cleaner
@@ -81,17 +87,20 @@ def _patch_job_query(mocker, mock_job):
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job,
+    )
 
 
 def _patch_profiles(
     mocker,
+    mock_job,
     end_user_first="Alice", end_user_last="Smith",
     cleaner_first="Bob", cleaner_last="Jones",
 ):
     """
-    Patch UserProfile.query so that:
-      - filter_by(user_id=END_USER_ID) returns a profile for the end user
-      - filter_by(user_id=<anything else>) returns a profile for the cleaner
+    Attach relationship profiles directly to the mocked job.
     """
     end_user_profile = mocker.Mock()
     end_user_profile.first_name = end_user_first
@@ -101,29 +110,16 @@ def _patch_profiles(
     cleaner_profile.first_name = cleaner_first
     cleaner_profile.last_name = cleaner_last
 
-    def _side_effect(**kwargs):
-        fb = mocker.Mock()
-        fb.first.return_value = (
-            end_user_profile if kwargs.get("user_id") == END_USER_ID else cleaner_profile
-        )
-        return fb
-
-    profile_query = mocker.Mock()
-    profile_query.filter_by.side_effect = _side_effect
-    mocker.patch("app.services.job_request_service.UserProfile.query", profile_query)
+    mock_job.end_user.profile = end_user_profile
+    mock_job.cleaner.profile = cleaner_profile
     return end_user_profile, cleaner_profile
 
 
-def _patch_no_profiles(mocker):
-    """Patch UserProfile.query so that every lookup returns None (no profile found)."""
-    def _side_effect(**kwargs):
-        fb = mocker.Mock()
-        fb.first.return_value = None
-        return fb
-
-    profile_query = mocker.Mock()
-    profile_query.filter_by.side_effect = _side_effect
-    mocker.patch("app.services.job_request_service.UserProfile.query", profile_query)
+def _patch_no_profiles(mocker, mock_job):
+    """Ensure neither mocked relationship has a profile attached."""
+    mock_job.end_user.profile = None
+    mock_job.cleaner.profile = None
+    return None
 
 
 # ===========================================================================
@@ -138,9 +134,9 @@ class TestUS26EndUserBookingConfirmation:
         """US-26 (happy path): confirmation email dispatched to end_user."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -160,9 +156,9 @@ class TestUS26EndUserBookingConfirmation:
         """US-26: recipient_name in email matches the end_user's profile."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker, end_user_first="Alice", end_user_last="Smith")
+        _patch_profiles(mocker, mock_job, end_user_first="Alice", end_user_last="Smith")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -181,9 +177,9 @@ class TestUS26EndUserBookingConfirmation:
         """US-26: 'Customer' used as recipient_name when end_user has no profile."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_no_profiles(mocker)
+        _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -203,9 +199,9 @@ class TestUS26EndUserBookingConfirmation:
         mock_job, mock_end_user, _ = mock_pending_unassigned_job
         mock_end_user.email = None
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -231,9 +227,9 @@ class TestUS27EndUserCancellationNotification:
         """US-27 (happy path): cancellation email dispatched to end_user."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -253,9 +249,9 @@ class TestUS27EndUserCancellationNotification:
         """US-27: recipient_name matches the end_user's profile."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker, end_user_first="Alice", end_user_last="Smith")
+        _patch_profiles(mocker, mock_job, end_user_first="Alice", end_user_last="Smith")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -279,7 +275,7 @@ class TestUS27EndUserCancellationNotification:
         mock_job.cleaner_id = CLEANER_ID  # preferred cleaner set
         _patch_job_query(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         result = JobRequestService.update_job_status(
@@ -296,9 +292,9 @@ class TestUS27EndUserCancellationNotification:
         mock_job, mock_end_user, _ = mock_confirmed_assigned_job
         mock_end_user.email = None
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -317,9 +313,9 @@ class TestUS27EndUserCancellationNotification:
         """US-27: 'Customer' used as recipient_name when end_user has no profile."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_no_profiles(mocker)
+        _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -345,9 +341,9 @@ class TestUS28CleanerBookingConfirmation:
         """US-28 (happy path): confirmation email dispatched to cleaner."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -367,9 +363,9 @@ class TestUS28CleanerBookingConfirmation:
         """US-28: recipient_name in email matches the cleaner's profile."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker, cleaner_first="Bob", cleaner_last="Jones")
+        _patch_profiles(mocker, mock_job, cleaner_first="Bob", cleaner_last="Jones")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -388,9 +384,9 @@ class TestUS28CleanerBookingConfirmation:
         """US-28: 'Cleaner' used as recipient_name when cleaner has no profile."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_no_profiles(mocker)
+        _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -410,9 +406,9 @@ class TestUS28CleanerBookingConfirmation:
         mock_job, _, mock_cleaner = mock_pending_unassigned_job
         mock_cleaner.email = None
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -431,9 +427,9 @@ class TestUS28CleanerBookingConfirmation:
         """US-26 + US-28: both end_user and cleaner receive confirmation emails."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(
@@ -457,9 +453,9 @@ class TestUS29CleanerCancellationNotification:
         """US-29 (happy path): cancellation email dispatched to cleaner."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -479,9 +475,9 @@ class TestUS29CleanerCancellationNotification:
         """US-29: recipient_name matches the cleaner's profile."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker, cleaner_first="Bob", cleaner_last="Jones")
+        _patch_profiles(mocker, mock_job, cleaner_first="Bob", cleaner_last="Jones")
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -500,9 +496,9 @@ class TestUS29CleanerCancellationNotification:
         """US-29: 'Cleaner' used as recipient_name when cleaner has no profile."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_no_profiles(mocker)
+        _patch_no_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -522,9 +518,9 @@ class TestUS29CleanerCancellationNotification:
         mock_job, _, mock_cleaner = mock_confirmed_assigned_job
         mock_cleaner.email = None
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -543,9 +539,9 @@ class TestUS29CleanerCancellationNotification:
         """US-27 + US-29: both end_user and cleaner receive cancellation emails."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_send = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -562,12 +558,12 @@ class TestUS29CleanerCancellationNotification:
         """US-29: send_booking_confirmation_email is NOT called when status is cancelled."""
         mock_job, _, _ = mock_confirmed_assigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_confirm = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
         mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
 
         JobRequestService.update_job_status(
@@ -582,12 +578,12 @@ class TestUS29CleanerCancellationNotification:
         """US-26/28: send_booking_cancellation_email is NOT called when status is confirmed."""
         mock_job, _, _ = mock_pending_unassigned_job
         _patch_job_query(mocker, mock_job)
-        _patch_profiles(mocker)
+        _patch_profiles(mocker, mock_job)
         mock_cancel = mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_cancellation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_cancellation_email"
         )
         mocker.patch(
-            "app.services.job_request_service.EmailService.send_booking_confirmation_email"
+            "app.services.job_event_listeners.EmailService.send_booking_confirmation_email"
         )
 
         JobRequestService.update_job_status(

@@ -16,6 +16,7 @@ from app.models import JobStatus
 
 def _make_mock_job(mocker, *, end_user_id=1, cleaner_id=5, status=JobStatus.confirmed):
     mock_job = mocker.Mock()
+    mock_job.id = 1
     mock_job.end_user_id = end_user_id
     mock_job.cleaner_id = cleaner_id
     mock_job.status = status
@@ -23,6 +24,8 @@ def _make_mock_job(mocker, *, end_user_id=1, cleaner_id=5, status=JobStatus.conf
     # Minimal relationship mocks so the email block doesn't error
     mock_job.end_user = mocker.Mock(id=end_user_id, email="user@test.com")
     mock_job.cleaner = mocker.Mock(id=cleaner_id, email="cleaner@test.com")
+    mock_job.end_user.profile = None
+    mock_job.cleaner.profile = None
     return mock_job
 
 
@@ -31,8 +34,11 @@ def _patch_query(mocker, mock_job):
     q.filter_by.return_value.filter.return_value.first.return_value = mock_job
     mocker.patch("app.services.job_request_service.JobRequest.query", q)
     mocker.patch("app.services.job_request_service.db.session")
-    mocker.patch("app.services.job_request_service.UserProfile.query").filter_by.return_value.first.return_value = None
-    mocker.patch("app.services.job_request_service.EmailService.send_booking_cancellation_email")
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job,
+    )
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_cancellation_email")
 
 
 # ---------------------------------------------------------------------------

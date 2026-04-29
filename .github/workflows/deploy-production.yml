@@ -1,0 +1,27 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Production EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy on EC2 over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_EC2_HOST }}
+          username: ${{ secrets.PROD_EC2_USER }}
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          port: ${{ secrets.PROD_EC2_PORT }}
+          script: |
+            cd ~/SWE5006-Group13
+            git fetch origin
+            git checkout main
+            git pull origin main
+            docker compose --env-file .env -f docker-compose.prod.yml down
+            docker compose --env-file .env -f docker-compose.prod.yml up -d --build
