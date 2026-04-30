@@ -43,5 +43,12 @@ services:
       - backend
     restart: always
 
+  papercut:
+    image: changemakerstudiosus/papercut-smtp:latest
+    ports:
+      - "2525:2525"   # SMTP
+      - "37408:8080"  # Web UI
+    restart: always
+
 volumes:
   postgres_data:
