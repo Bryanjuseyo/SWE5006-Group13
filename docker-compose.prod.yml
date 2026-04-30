@@ -35,7 +35,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.staging
+      dockerfile: Dockerfile.prod
     container_name: cleanmatch-frontend
     ports:
       - "80:80"
