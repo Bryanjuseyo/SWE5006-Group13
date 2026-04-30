@@ -1,0 +1,687 @@
+from typing import Dict, Any, Optional
+from datetime import datetime, date, timedelta, timezone
+
+from sqlalchemy import or_, and_, false
+from sqlalchemy.orm import joinedload
+from app.models import (
+    db, JobRequest, JobStatus, ServiceType, User, UserRole,
+    CleanerProfile, PRIORITY_WINDOW_HOURS
+)
+from app.services.job_request_commands import (
+    CreateJobRequestCommand,
+    DeleteJobRequestCommand,
+    JobRequestCommandInvoker,
+    UpdateJobRequestCommand,
+    UpdateJobStatusCommand,
+)
+from app.services.job_request_states import JobRequestStateFactory
+from app.services.job_event_publisher import JobEventPublisher
+from app.services.job_event_listeners import EmailNotificationListener
+
+
+class JobRequestService:
+    @staticmethod
+    def _paginate_query(query, page: int, per_page: int):
+        if page < 1:
+            raise ValueError("invalid_pagination|page must be at least 1.")
+        if per_page < 1:
+            raise ValueError("invalid_pagination|per_page must be at least 1.")
+
+        per_page = min(per_page, 100)
+
+        total = query.order_by(None).count()
+        if not isinstance(total, int):
+            items = query.all()
+            return items, {
+                "page": 1,
+                "per_page": len(items) or per_page,
+                "total": len(items),
+                "total_pages": 1 if items else 0,
+                "has_prev": False,
+                "has_next": False,
+            }
+
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return items, {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        }
+
+    @staticmethod
+    def _job_request_load_options(include_user_profiles: bool = False):
+        end_user_option = joinedload(JobRequest.end_user)
+        cleaner_option = joinedload(JobRequest.cleaner)
+
+        if include_user_profiles:
+            end_user_option = end_user_option.joinedload(User.profile)
+            cleaner_option = cleaner_option.joinedload(User.profile)
+
+        return end_user_option, cleaner_option
+
+    @staticmethod
+    def _get_job_request_with_relationships(
+        job_request_id: int,
+        include_user_profiles: bool = False,
+    ):
+        return (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options(include_user_profiles))
+            .filter_by(id=job_request_id)
+            .first()
+        )
+
+    @staticmethod
+    def _build_job_event_publisher():
+        publisher = JobEventPublisher()
+        publisher.subscribe(EmailNotificationListener())
+        return publisher
+
+    @staticmethod
+    def create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
+        command = CreateJobRequestCommand(end_user_id, data)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _create_job_request(end_user_id: int, data: dict) -> Dict[str, Any]:
+        """
+        Create a new job request
+        """
+        data = data or {}
+
+        # Allowed fields for creation
+        allowed = {
+            "title", "description", "service_type", "location",
+            "preferred_date", "preferred_time_start", "preferred_time_end",
+            "cleaner_id",
+        }
+        updates = {k: data.get(k) for k in allowed if k in data}
+
+        # Validate required fields
+        if not updates.get("title"):
+            raise ValueError("invalid_request|title is required.")
+        if not updates.get("service_type"):
+            raise ValueError("invalid_request|service_type is required.")
+        if not updates.get("location", "").strip():
+            raise ValueError("invalid_request|location is required.")
+        if not updates.get("preferred_date"):
+            raise ValueError("invalid_request|preferred_date is required.")
+
+        # Validate service_type if provided
+        if "service_type" in updates and updates["service_type"] is not None:
+            try:
+                updates["service_type"] = ServiceType(updates["service_type"])
+            except Exception:
+                valid = ", ".join([s.value for s in ServiceType])
+                raise ValueError(f"invalid_service_type|service_type must be one of: {valid}.")
+
+        # Validate preferred_date if provided
+        if "preferred_date" in updates and updates["preferred_date"] is not None:
+            try:
+                if isinstance(updates["preferred_date"], str):
+                    updates["preferred_date"] = datetime.strptime(
+                        updates["preferred_date"], "%Y-%m-%d"
+                    ).date()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_date|preferred_date must be in YYYY-MM-DD format.")
+            if updates["preferred_date"] < date.today():
+                raise ValueError("invalid_date|preferred_date cannot be in the past.")
+
+        # Validate preferred_time_start if provided
+        if "preferred_time_start" in updates and updates["preferred_time_start"] is not None:
+            try:
+                if isinstance(updates["preferred_time_start"], str):
+                    updates["preferred_time_start"] = datetime.strptime(
+                        updates["preferred_time_start"], "%H:%M"
+                    ).time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|preferred_time_start must be in HH:MM format.")
+            # If the job is scheduled for today, start time cannot be in the past
+            job_date = updates.get("preferred_date")
+            if job_date == date.today() and updates["preferred_time_start"] < datetime.now().time():
+                raise ValueError("invalid_time|preferred_time_start cannot be in the past.")
+
+        # Validate preferred_time_end if provided
+        if "preferred_time_end" in updates and updates["preferred_time_end"] is not None:
+            try:
+                if isinstance(updates["preferred_time_end"], str):
+                    updates["preferred_time_end"] = datetime.strptime(
+                        updates["preferred_time_end"], "%H:%M"
+                    ).time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|preferred_time_end must be in HH:MM format.")
+
+        # Validate time range (end must be strictly after start)
+        start_time = updates.get("preferred_time_start")
+        end_time = updates.get("preferred_time_end")
+        if start_time and end_time and end_time <= start_time:
+            raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
+
+        # Validate cleaner
+        if "cleaner_id" in updates:
+            updates["cleaner_id"] = JobRequestService._validate_cleaner_id(updates.get("cleaner_id"))
+
+        # Set priority window if a preferred cleaner is selected
+        priority_window_end = None
+        if updates.get("cleaner_id"):
+            priority_window_end = datetime.now(timezone.utc) + timedelta(hours=PRIORITY_WINDOW_HOURS)
+
+        # Create job request
+        job_request = JobRequest(
+            end_user_id=end_user_id,
+            status=JobStatus.pending,
+            priority_window_end=priority_window_end,
+            **updates
+        )
+        db.session.add(job_request)
+        db.session.commit()
+
+        # Eager-load relationships so to_dict() doesn't trigger extra queries.
+        job_request = JobRequestService._get_job_request_with_relationships(job_request.id)
+
+        return {
+            "message": "Job request created successfully.",
+            "job_request": job_request.to_dict()
+        }
+
+    @staticmethod
+    def update_job_request(
+        job_request_id: int,
+        user_id: int,
+        role: str,
+        data: dict
+    ) -> Dict[str, Any]:
+        command = UpdateJobRequestCommand(job_request_id, user_id, role, data)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _update_job_request(
+        job_request_id: int,
+        user_id: int,
+        role: str,
+        data: dict
+    ) -> Dict[str, Any]:
+        """
+        Update job request details
+        """
+        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
+            JobRequest.deleted_at.is_(None)
+        ).first()
+        if not job_request:
+            raise ValueError("not_found|Job request not found.")
+
+        # Only owner can update
+        if job_request.end_user_id != user_id:
+            raise ValueError("forbidden|You are not authorized to update this job request.")
+
+        # Cannot update cancelled or completed jobs
+        if job_request.status in [JobStatus.completed, JobStatus.cancelled]:
+            raise ValueError("invalid_status|Cannot update a completed or cancelled job request.")
+
+        data = data or {}
+
+        # Allowed fields for update
+        allowed = {
+            "title", "description", "service_type", "location",
+            "preferred_date", "preferred_time_start", "preferred_time_end",
+            "cleaner_id",
+        }
+        updates = {k: data.get(k) for k in allowed if k in data}
+
+        # Validate that required fields are not being cleared
+        if "service_type" in updates and not updates.get("service_type"):
+            raise ValueError("invalid_request|service_type is required.")
+        if "location" in updates and not (updates.get("location") or "").strip():
+            raise ValueError("invalid_request|location is required.")
+        if "preferred_date" in updates and not updates.get("preferred_date"):
+            raise ValueError("invalid_request|preferred_date is required.")
+
+        # Validate service_type if provided
+        if "service_type" in updates and updates["service_type"] is not None:
+            try:
+                updates["service_type"] = ServiceType(updates["service_type"])
+            except Exception:
+                valid = ", ".join([s.value for s in ServiceType])
+                raise ValueError(f"invalid_service_type|service_type must be one of: {valid}.")
+
+        # Validate preferred_date if provided
+        if "preferred_date" in updates and updates["preferred_date"] is not None:
+            try:
+                if isinstance(updates["preferred_date"], str):
+                    updates["preferred_date"] = datetime.strptime(
+                        updates["preferred_date"], "%Y-%m-%d"
+                    ).date()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_date|preferred_date must be in YYYY-MM-DD format.")
+            if updates["preferred_date"] < date.today():
+                raise ValueError("invalid_date|preferred_date cannot be in the past.")
+
+        # Validate preferred_time_start if provided
+        if "preferred_time_start" in updates and updates["preferred_time_start"] is not None:
+            try:
+                if isinstance(updates["preferred_time_start"], str):
+                    updates["preferred_time_start"] = datetime.strptime(
+                        updates["preferred_time_start"], "%H:%M"
+                    ).time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|preferred_time_start must be in HH:MM format.")
+            # Use the updated date if provided, otherwise fall back to the existing date
+            job_date = updates.get("preferred_date", job_request.preferred_date)
+            if job_date == date.today() and updates["preferred_time_start"] < datetime.now().time():
+                raise ValueError("invalid_time|preferred_time_start cannot be in the past.")
+
+        # Validate preferred_time_end if provided
+        if "preferred_time_end" in updates and updates["preferred_time_end"] is not None:
+            try:
+                if isinstance(updates["preferred_time_end"], str):
+                    updates["preferred_time_end"] = datetime.strptime(
+                        updates["preferred_time_end"], "%H:%M"
+                    ).time()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_time|preferred_time_end must be in HH:MM format.")
+
+        # Validate time range (end must be strictly after start)
+        start_time = updates.get("preferred_time_start", job_request.preferred_time_start)
+        end_time = updates.get("preferred_time_end", job_request.preferred_time_end)
+        if start_time and end_time and end_time <= start_time:
+            raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
+
+        # Validate cleaner
+        if "cleaner_id" in updates:
+            if job_request.status != JobStatus.pending:
+                raise ValueError("invalid_status|Cannot change preferred cleaner unless job is pending.")
+            updates["cleaner_id"] = JobRequestService._validate_cleaner_id(updates.get("cleaner_id"))
+
+        # Apply updates
+        for k, v in updates.items():
+            setattr(job_request, k, v)
+
+        # Reset priority window when preferred cleaner changes
+        if "cleaner_id" in updates:
+            if job_request.cleaner_id:
+                job_request.priority_window_end = datetime.now(timezone.utc) + timedelta(hours=PRIORITY_WINDOW_HOURS)
+            else:
+                job_request.priority_window_end = None
+
+        db.session.commit()
+
+        # Refresh with eager-loaded relationships for to_dict().
+        job_request = JobRequestService._get_job_request_with_relationships(job_request.id)
+
+        return {
+            "message": "Job request updated successfully.",
+            "job_request": job_request.to_dict()
+        }
+
+    @staticmethod
+    def delete_job_request(job_request_id: int, user_id: int, role: str) -> Dict[str, Any]:
+        command = DeleteJobRequestCommand(job_request_id, user_id, role)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _delete_job_request(job_request_id: int, user_id: int, role: str) -> Dict[str, Any]:
+        """
+        Delete a job request.
+        Only the end user who created the request can delete it.
+        """
+        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
+            JobRequest.deleted_at.is_(None)
+        ).first()
+        if not job_request:
+            raise ValueError("not_found|Job request not found.")
+
+        # Only owner can delete
+        if job_request.end_user_id != user_id:
+            raise ValueError("forbidden|You are not authorized to delete this job request.")
+
+        # Cannot delete in_progress, cleaner_completed, or completed jobs
+        if job_request.status in [JobStatus.in_progress, JobStatus.cleaner_completed, JobStatus.completed]:
+            raise ValueError(
+                "invalid_status|Cannot delete a job request that is in progress or completed."
+            )
+
+        job_request.deleted_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        return {"message": "Job request deleted successfully."}
+
+    @staticmethod
+    def get_job_request(job_request_id: int, user_id: int, role: str) -> Dict[str, Any]:
+        """
+        Get a single job request by ID.
+        End users can only view their own requests.
+        Cleaners can view requests assigned to them or unassigned pending requests.
+        """
+        job_request = (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
+            .filter_by(id=job_request_id)
+            .filter(JobRequest.deleted_at.is_(None))
+            .first()
+        )
+        if not job_request:
+            raise ValueError("not_found|Job request not found.")
+
+        # Check authorization
+        now = datetime.now(timezone.utc)
+        if role == "end_user" and job_request.end_user_id != user_id:
+            raise ValueError("forbidden|You are not authorized to view this job request.")
+        if role == "cleaner":
+            is_assigned_to_cleaner = job_request.cleaner_id == user_id
+            is_open_pending = job_request.cleaner_id is None and job_request.status == JobStatus.pending
+            # Allow viewing if priority window has expired (open to all)
+            is_expired_priority = (
+                job_request.status == JobStatus.pending
+                and job_request.priority_window_end is not None
+                and job_request.priority_window_end < now
+            )
+            if not is_assigned_to_cleaner and not is_open_pending and not is_expired_priority:
+                raise ValueError("forbidden|You are not authorized to view this job request.")
+
+        return {"job_request": job_request.to_dict()}
+
+    @staticmethod
+    def get_job_requests(
+        user_id: int,
+        role: str,
+        status: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> Dict[str, Any]:
+        """
+        Get job requests based on user role.
+        End users see their own requests.
+        Cleaners see requests assigned to them.
+        """
+        now = datetime.now(timezone.utc)
+
+        if role == "end_user":
+            query = JobRequest.query.filter_by(end_user_id=user_id)
+        elif role == "cleaner":
+            cleaner_profile = CleanerProfile.query.filter_by(user_id=user_id).first()
+            cleaner_service_type = cleaner_profile.service_type if cleaner_profile else None
+
+            if cleaner_service_type:
+                # Open jobs: pending, matching service type, and either:
+                # - no cleaner assigned, OR
+                # - has a preferred cleaner but priority window has expired
+                open_job_filter = and_(
+                    JobRequest.status == JobStatus.pending,
+                    JobRequest.service_type == cleaner_service_type,
+                    or_(
+                        JobRequest.cleaner_id.is_(None),
+                        and_(
+                            JobRequest.priority_window_end.isnot(None),
+                            JobRequest.priority_window_end < now,
+                        ),
+                    ),
+                )
+            else:
+                open_job_filter = false()
+
+            # cleaner_id == user_id covers assigned jobs + priority window jobs
+            query = JobRequest.query.filter(
+                or_(
+                    JobRequest.cleaner_id == user_id,
+                    open_job_filter,
+                )
+            )
+        else:
+            # Administrator can see all
+            query = JobRequest.query
+
+        # Filter by status if provided
+        if status:
+            try:
+                status_enum = JobStatus(status)
+                query = query.filter_by(status=status_enum)
+            except ValueError:
+                valid = ", ".join([s.value for s in JobStatus])
+                raise ValueError(f"invalid_status|status must be one of: {valid}.")
+
+        # Exclude soft-deleted records
+        query = query.filter(JobRequest.deleted_at.is_(None))
+
+        # Eager-load relationships so to_dict() doesn't trigger N+1 queries.
+        query = query.options(*JobRequestService._job_request_load_options())
+
+        # Order by most recent first
+        query = query.order_by(JobRequest.created_at.desc())
+        job_requests, pagination = JobRequestService._paginate_query(query, page, per_page)
+
+        return {
+            "job_requests": [jr.to_dict() for jr in job_requests],
+            "pagination": pagination,
+        }
+
+    @staticmethod
+    def update_job_status(
+        job_request_id: int,
+        user_id: int,
+        role: str,
+        new_status: str
+    ) -> Dict[str, Any]:
+        command = UpdateJobStatusCommand(job_request_id, user_id, role, new_status)
+        return JobRequestCommandInvoker.execute(command)
+
+    @staticmethod
+    def _update_job_status(
+        job_request_id: int,
+        user_id: int,
+        role: str,
+        new_status: str
+    ) -> Dict[str, Any]:
+        """
+        Update job request status (pending, confirmed, in_progress, completed, cancelled).
+        - End users can cancel their pending/confirmed requests
+        - Cleaners can confirm, start, and complete assigned jobs
+        """
+        job_request = JobRequest.query.filter_by(id=job_request_id).filter(
+            JobRequest.deleted_at.is_(None)
+        ).first()
+        if not job_request:
+            raise ValueError("not_found|Job request not found.")
+
+        try:
+            new_status_enum = JobStatus(new_status)
+        except ValueError:
+            valid = ", ".join([s.value for s in JobStatus])
+            raise ValueError(f"invalid_status|status must be one of: {valid}.")
+
+        state = JobRequestStateFactory.get_state(job_request.status)
+        transition = state.transition(job_request, user_id, role, new_status_enum)
+
+        if transition.status is not None:
+            job_request.status = transition.status
+
+        db.session.commit()
+
+        if transition.return_immediately:
+            return {
+                "message": transition.message,
+                "job_request": job_request.to_dict()
+            }
+
+        # Re-fetch with eager-loaded relationships to avoid lazy-load queries.
+        job_request = JobRequestService._get_job_request_with_relationships(
+            job_request.id,
+            include_user_profiles=True,
+        )
+
+        final_status = transition.status or job_request.status
+        publisher = JobRequestService._build_job_event_publisher()
+
+        if final_status == JobStatus.confirmed:
+            publisher.notify("job_confirmed", job_request)
+        elif final_status == JobStatus.cancelled:
+            publisher.notify("job_cancelled", job_request)
+
+        return {
+            "message": f"Job request status updated to {new_status}.",
+            "job_request": job_request.to_dict()
+        }
+
+    @staticmethod
+    def get_cleaner_schedule(user_id: int, page: int = 1, per_page: int = 25) -> Dict[str, Any]:
+        """
+        Return upcoming confirmed or in_progress jobs for a cleaner.
+        Ordered by date then start time.
+        """
+        today = date.today()
+        jobs = (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
+            .filter(
+                JobRequest.cleaner_id == user_id,
+                JobRequest.status.in_([JobStatus.confirmed, JobStatus.in_progress]),
+                JobRequest.preferred_date >= today,
+                JobRequest.deleted_at.is_(None),
+            )
+            .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
+        )
+        jobs, pagination = JobRequestService._paginate_query(jobs, page, per_page)
+        return {"schedule": [j.to_dict() for j in jobs], "pagination": pagination}
+
+    @staticmethod
+    def get_available_jobs(user_id: int, page: int = 1, per_page: int = 25) -> Dict[str, Any]:
+        """
+        Return open (unassigned, pending) job requests that match the cleaner's
+        service_type and fall within their availability slots.
+        Excludes jobs in a priority window for a different cleaner.
+        """
+        if page < 1:
+            raise ValueError("invalid_pagination|page must be at least 1.")
+        if per_page < 1:
+            raise ValueError("invalid_pagination|per_page must be at least 1.")
+        per_page = min(per_page, 100)
+
+        cleaner_profile = (
+            CleanerProfile.query
+            .options(joinedload(CleanerProfile.availability))
+            .filter_by(user_id=user_id)
+            .first()
+        )
+        if not cleaner_profile:
+            return {
+                "job_requests": [],
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": 0,
+                    "total_pages": 0,
+                    "has_prev": False,
+                    "has_next": False,
+                },
+            }
+
+        today = date.today()
+        now = datetime.now(timezone.utc)
+
+        jobs_query = (
+            JobRequest.query
+            .options(*JobRequestService._job_request_load_options())
+            .filter(
+                JobRequest.status == JobStatus.pending,
+                JobRequest.service_type == cleaner_profile.service_type,
+                JobRequest.preferred_date >= today,
+                JobRequest.deleted_at.is_(None),
+                or_(
+                    # No cleaner assigned
+                    JobRequest.cleaner_id.is_(None),
+                    # Assigned to this cleaner (preferred or otherwise)
+                    JobRequest.cleaner_id == user_id,
+                    # Has a preferred cleaner but priority window expired
+                    and_(
+                        JobRequest.priority_window_end.isnot(None),
+                        JobRequest.priority_window_end < now,
+                    ),
+                ),
+            )
+            .order_by(JobRequest.preferred_date.asc(), JobRequest.preferred_time_start.asc())
+        )
+        jobs = jobs_query.all()
+
+        # If the cleaner has availability slots, only show jobs that fit within them.
+        # If no slots are set, all matching jobs are shown.
+        availability = cleaner_profile.availability
+        if availability:
+            jobs = [j for j in jobs if JobRequestService._job_fits_availability(j, availability)]
+
+        total = len(jobs)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paged_jobs = jobs[start:end]
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return {
+            "job_requests": [j.to_dict() for j in paged_jobs],
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            },
+        }
+
+    @staticmethod
+    def _job_fits_availability(job, slots) -> bool:
+        """
+        Return True if the job's preferred date/time falls within at least one
+        availability slot.
+
+        Date: job.preferred_date must be within [slot.start_date, slot.end_date].
+        Time: only checked when the slot has a start_time set.
+          - If the job has no preferred_time_start, it fits any timed slot.
+          - Otherwise job.preferred_time_start must be >= slot.start_time, and
+            if both slot and job have an end time, job end <= slot end.
+        """
+        for slot in slots:
+            if not (slot.start_date <= job.preferred_date <= slot.end_date):
+                continue
+
+            # Date matches. Check time only if the slot has any time constraint.
+            if slot.start_time is None and slot.end_time is None:
+                return True  # slot covers the whole day
+
+            # Job has no time preference at all - fits any open slot
+            if job.preferred_time_start is None and job.preferred_time_end is None:
+                return True
+
+            # Check start time constraint (only if both slot and job have a start time)
+            if slot.start_time is not None and job.preferred_time_start is not None:
+                if job.preferred_time_start < slot.start_time:
+                    continue  # job starts before cleaner is available
+
+            # Check end time constraint (only if both slot and job have an end time)
+            if slot.end_time is not None and job.preferred_time_end is not None:
+                if job.preferred_time_end > slot.end_time:
+                    continue  # job ends after cleaner is done
+
+            return True
+
+        return False
+
+    # Helper for cleaner validation
+    @staticmethod
+    def _validate_cleaner_id(cleaner_id: int | None) -> int | None:
+        if cleaner_id is None:
+            return None
+
+        cleaner = User.query.get(cleaner_id)
+        if not cleaner:
+            raise ValueError("not_found|Selected cleaner not found")
+
+        if cleaner.role != UserRole.cleaner:
+            raise ValueError("invalid_request|Selected user is not a cleaner")
+
+        if cleaner.is_banned:
+            raise ValueError("invalid_request|This cleaner is currently unavailable.")
+
+        return cleaner_id

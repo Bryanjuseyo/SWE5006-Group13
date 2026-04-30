@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import UserMixin
 import enum
+
+PRIORITY_WINDOW_HOURS = 4
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -22,6 +24,16 @@ class ServiceType(enum.Enum):
     partial = 'partial'
     full = 'full'
 
+
+class JobStatus(enum.Enum):
+    pending = 'pending'
+    confirmed = 'confirmed'
+    in_progress = 'in_progress'
+    cleaner_completed = 'cleaner_completed'
+    completed = 'completed'
+    cancelled = 'cancelled'
+    rejected = 'rejected'
+
 # =============================================
 # USER (Authentication)
 # =============================================
@@ -29,13 +41,29 @@ class ServiceType(enum.Enum):
 
 class User(db.Model, UserMixin):
     __tablename__ = 'users'
+    __table_args__ = (
+        db.Index('ix_users_role_is_banned', 'role', 'is_banned'),
+    )
 
     id = db.Column(db.BigInteger, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.Enum(UserRole), default=UserRole.end_user, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
+    is_banned = db.Column(db.Boolean, nullable=False, default=False)
+    banned_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    ban_reason = db.Column(db.String(500), nullable=True)
+    failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_login_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    two_factor_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    two_factor_otp = db.Column(db.String(255), nullable=True)
+    two_factor_otp_expires = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
     profile = db.relationship('UserProfile', backref='user', uselist=False, cascade='all, delete-orphan')
@@ -52,7 +80,12 @@ class User(db.Model, UserMixin):
             'id': self.id,
             'email': self.email,
             'role': self.role.value,
-            'created_at': self.created_at.isoformat()
+            'is_banned': self.is_banned,
+            'banned_at': self.banned_at.isoformat() if self.banned_at else None,
+            'ban_reason': self.ban_reason,
+            'created_at': self.created_at.isoformat(),
+            'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
+            'two_factor_enabled': self.two_factor_enabled,
         }
 
 # =============================================
@@ -70,8 +103,12 @@ class UserProfile(db.Model):
     phone = db.Column(db.String(20))
     address = db.Column(db.Text)
     city = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
 
     def to_dict(self):
         return {
@@ -113,11 +150,15 @@ class CleanerProfile(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True)
     user_id = db.Column(db.BigInteger, db.ForeignKey('users.id', ondelete='CASCADE'), unique=True, nullable=False)
-    service_type = db.Column(db.Enum(ServiceType), nullable=False)
+    service_type = db.Column(db.Enum(ServiceType), nullable=False, index=True)
     hourly_rate = db.Column(db.Numeric(10, 2))
     years_experience = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
 
     # Relationships
     offered_services = db.relationship('CleanerOfferedService', backref='cleaner_profile', cascade='all, delete-orphan')
@@ -191,8 +232,14 @@ class CleanerAvailability(db.Model):
     end_time = db.Column(db.Time)
 
     __table_args__ = (
+        db.Index(
+            'ix_cleaner_availability_profile_dates',
+            'cleaner_profile_id',
+            'start_date',
+            'end_date',
+        ),
         db.CheckConstraint('end_date >= start_date'),
-        db.CheckConstraint('end_time > start_time OR end_time IS NULL'),
+        db.CheckConstraint('end_time IS NULL OR (start_time IS NOT NULL AND end_time > start_time)'),
     )
 
     def to_dict(self):
@@ -203,4 +250,97 @@ class CleanerAvailability(db.Model):
             'end_date': self.end_date.isoformat(),
             'start_time': self.start_time.isoformat() if self.start_time else None,
             'end_time': self.end_time.isoformat() if self.end_time else None
+        }
+
+# =============================================
+# JOB REQUESTS
+# =============================================
+
+
+class JobRequest(db.Model):
+    __tablename__ = 'job_requests'
+    __table_args__ = (
+        db.Index(
+            'ix_job_requests_cleaner_date_status_deleted',
+            'cleaner_id',
+            'preferred_date',
+            'status',
+            'deleted_at',
+        ),
+        db.Index(
+            'ix_job_requests_date_status_deleted',
+            'preferred_date',
+            'status',
+            'deleted_at',
+        ),
+    )
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    end_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False
+    )
+    cleaner_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True
+    )
+
+    # Job details
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    service_type = db.Column(db.Enum(ServiceType), nullable=False)
+    location = db.Column(db.Text, nullable=False)
+
+    # Scheduling
+    preferred_date = db.Column(db.Date, nullable=False)
+    preferred_time_start = db.Column(db.Time, nullable=True)
+    preferred_time_end = db.Column(db.Time, nullable=True)
+
+    # Status
+    status = db.Column(db.Enum(JobStatus), default=JobStatus.pending, nullable=False)
+
+    # Priority window for preferred cleaner
+    priority_window_end = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(
+            timezone=True), default=lambda: datetime.now(
+            timezone.utc), onupdate=lambda: datetime.now(
+                timezone.utc))
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True, default=None)
+
+    # Relationships
+    end_user = db.relationship('User', foreign_keys=[end_user_id], backref='job_requests_as_client')
+    cleaner = db.relationship('User', foreign_keys=[cleaner_id], backref='job_requests_as_cleaner')
+
+    @property
+    def is_in_priority_window(self):
+        """Check if the job is still within the preferred cleaner's priority window."""
+        if self.priority_window_end is None:
+            return False
+        return datetime.now(timezone.utc) < self.priority_window_end
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'end_user_id': self.end_user_id,
+            'cleaner_id': self.cleaner_id,
+            'title': self.title,
+            'description': self.description,
+            'service_type': self.service_type.value if self.service_type else None,
+            'location': self.location,
+            'preferred_date': self.preferred_date.isoformat() if self.preferred_date else None,
+            'preferred_time_start': self.preferred_time_start.isoformat() if self.preferred_time_start else None,
+            'preferred_time_end': self.preferred_time_end.isoformat() if self.preferred_time_end else None,
+            'status': self.status.value,
+            'priority_window_end': self.priority_window_end.isoformat() if self.priority_window_end else None,
+            'is_in_priority_window': self.is_in_priority_window,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'end_user': self.end_user.to_dict() if self.end_user else None,
+            'cleaner': self.cleaner.to_dict() if self.cleaner else None
         }

@@ -16,6 +16,13 @@ services:
       timeout: 5s
       retries: 5
 
+  papercut:
+    image: changemakerstudiosus/papercut-smtp:latest
+    ports:
+      - "2525:2525"   # SMTP
+      - "37408:8080"  # Web UI
+    restart: always
+
   backend:
     build: ./backend
     ports:
@@ -23,17 +30,26 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      papercut:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://cleanmatch_user:securepassword123@db:5432/cleanmatch
+      SMTP_HOST: ${SMTP_HOST:-papercut}
+      SMTP_PORT: ${SMTP_PORT:-2525}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@cleanmatch.com}
     restart: always
 
-  # frontend:
-  #   build: ./frontend
-  #   ports:
-  #     - "80:3000"
-  #   depends_on:
-  #     - backend
-  #   restart: always
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: always
+
 
 volumes:
   postgres_data:
