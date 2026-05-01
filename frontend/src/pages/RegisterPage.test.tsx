@@ -221,6 +221,7 @@ describe('RegisterPage – OTP step', () => {
 
   it('calls verify2FA and navigates to /dashboard on success', async () => {
     vi.mocked(authApi.verify2FA).mockResolvedValue({
+      message: 'ok',
       token: 'jwt-token',
       user: { id: 1, email: 'user@test.com', role: 'end_user', created_at: '', two_factor_enabled: false },
     });
