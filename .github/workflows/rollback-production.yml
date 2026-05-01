@@ -18,9 +18,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup SSH key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.PROD_EC2_SSH_KEY }}" > ~/.ssh/prod_ec2_key
+          printf "%s" "$EC2_SSH_KEY" > ~/.ssh/prod_ec2_key
           chmod 600 ~/.ssh/prod_ec2_key
 
       - name: Create production Ansible inventory

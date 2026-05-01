@@ -17,6 +17,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup SSH key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
           printf "%s" "$EC2_SSH_KEY" > ~/.ssh/ec2_key
