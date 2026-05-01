@@ -1,0 +1,43 @@
+- name: Rollback staging deployment
+  hosts: staging
+  become: yes
+
+  vars:
+    app_dir: /home/ubuntu/SWE5006-Group13
+
+  tasks:
+    - name: Go to application directory and fetch latest git history
+      shell: |
+        cd {{ app_dir }}
+        git fetch origin
+      args:
+        executable: /bin/bash
+
+    - name: Checkout rollback commit
+      shell: |
+        cd {{ app_dir }}
+        git checkout {{ rollback_commit }}
+      args:
+        executable: /bin/bash
+
+    - name: Stop staging containers without deleting volumes
+      shell: |
+        cd {{ app_dir }}
+        docker compose --env-file .env.staging -f docker-compose.staging.yml down
+      args:
+        executable: /bin/bash
+
+    - name: Rebuild and start staging containers from rollback commit
+      shell: |
+        cd {{ app_dir }}
+        docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --build
+      args:
+        executable: /bin/bash
+
+    - name: Show running containers
+      shell: docker ps
+      register: docker_ps_output
+
+    - name: Print running containers
+      debug:
+        var: docker_ps_output.stdout_lines
