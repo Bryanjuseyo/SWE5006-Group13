@@ -1,4 +1,3 @@
-import pytest
 from jwt import ExpiredSignatureError
 
 

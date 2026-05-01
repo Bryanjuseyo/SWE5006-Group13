@@ -136,7 +136,7 @@ describe('RegisterPage – step 2', () => {
   });
 
   it('calls register() when end_user submits step 2', async () => {
-    vi.mocked(authApi.register).mockResolvedValue({ temp_token: 'tok123' });
+    vi.mocked(authApi.register).mockResolvedValue({ message: 'Registered.', requires_2fa: true, temp_token: 'tok123' });
     await advanceToStep2('end_user');
     await userEvent.type(screen.getByPlaceholderText(/jane/i), 'Jane');
     await userEvent.type(screen.getByPlaceholderText(/doe/i), 'Doe');
@@ -187,7 +187,7 @@ describe('RegisterPage – step 3 (cleaner)', () => {
   });
 
   it('calls register() and shows OTP step on successful cleaner registration', async () => {
-    vi.mocked(authApi.register).mockResolvedValue({ temp_token: 'tok123' });
+    vi.mocked(authApi.register).mockResolvedValue({ message: 'Registered.', requires_2fa: true, temp_token: 'tok123' });
     await advanceToStep3();
     await userEvent.click(screen.getByRole('button', { name: /complete registration/i }));
     await waitFor(() => {
@@ -201,7 +201,7 @@ describe('RegisterPage – OTP step', () => {
   beforeEach(() => vi.clearAllMocks());
 
   async function reachOtpStep() {
-    vi.mocked(authApi.register).mockResolvedValue({ temp_token: 'tok123' });
+    vi.mocked(authApi.register).mockResolvedValue({ message: 'Registered.', requires_2fa: true, temp_token: 'tok123' });
     render(<MemoryRouter><RegisterPage /></MemoryRouter>);
     const emailInputs = screen.getAllByRole('textbox');
     await userEvent.type(emailInputs[0], 'user@test.com');
@@ -222,7 +222,7 @@ describe('RegisterPage – OTP step', () => {
   it('calls verify2FA and navigates to /dashboard on success', async () => {
     vi.mocked(authApi.verify2FA).mockResolvedValue({
       token: 'jwt-token',
-      user: { id: 1, email: 'user@test.com', role: 'end_user', created_at: '' },
+      user: { id: 1, email: 'user@test.com', role: 'end_user', created_at: '', two_factor_enabled: false },
     });
     await reachOtpStep();
     await userEvent.type(screen.getByPlaceholderText('000000'), '123456');

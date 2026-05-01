@@ -75,7 +75,7 @@ describe('CleanerAvailabilityPage – form submission', () => {
 
   it('calls addAvailability and shows success message with valid dates', async () => {
     vi.mocked(availabilityApi.getAvailability).mockResolvedValue({ availability: [] });
-    vi.mocked(availabilityApi.addAvailability).mockResolvedValue({ slot: MOCK_SLOT });
+    vi.mocked(availabilityApi.addAvailability).mockResolvedValue({ message: 'ok', availability: MOCK_SLOT });
     render(<MemoryRouter><CleanerAvailabilityPage /></MemoryRouter>);
     await waitFor(() => screen.getByRole('button', { name: /add slot/i }));
 
@@ -168,7 +168,7 @@ describe('CleanerAvailabilityPage – edit and delete', () => {
 
   it('submitting after Edit calls updateAvailability not addAvailability', async () => {
     vi.mocked(availabilityApi.getAvailability).mockResolvedValue({ availability: [MOCK_SLOT] });
-    vi.mocked(availabilityApi.updateAvailability).mockResolvedValue({ slot: MOCK_SLOT });
+    vi.mocked(availabilityApi.updateAvailability).mockResolvedValue({ message: 'ok', availability: MOCK_SLOT });
     render(<MemoryRouter><CleanerAvailabilityPage /></MemoryRouter>);
     await waitFor(() => screen.getByRole('button', { name: /^edit$/i }));
 
@@ -200,7 +200,7 @@ describe('CleanerAvailabilityPage – edit and delete', () => {
 
   it('clicking Remove calls deleteAvailability and removes slot from list', async () => {
     vi.mocked(availabilityApi.getAvailability).mockResolvedValue({ availability: [MOCK_SLOT] });
-    vi.mocked(availabilityApi.deleteAvailability).mockResolvedValue(undefined);
+    vi.mocked(availabilityApi.deleteAvailability).mockResolvedValue({ message: 'ok' });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<MemoryRouter><CleanerAvailabilityPage /></MemoryRouter>);
     await waitFor(() => screen.getByRole('button', { name: /remove/i }));
