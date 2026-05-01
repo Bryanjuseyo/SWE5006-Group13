@@ -1,0 +1,42 @@
+name: Rollback Staging
+on:
+  workflow_dispatch:
+    inputs:
+      rollback_commit:
+        description: "Git commit SHA to rollback staging to"
+        required: true
+        type: string
+
+jobs:
+  rollback:
+    name: Rollback Staging on EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+
+      - name: Create Staging Ansible inventory
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          echo "[staging]" > inventory.ini
+          echo "$EC2_HOST ansible_user=$EC2_USER ansible_port=$EC2_PORT ansible_ssh_private_key_file=~/.ssh/ec2_key" >> inventory.ini
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Rollback staging
+        run: |
+          ansible-playbook -i inventory.ini ansible/rollback-staging.yml \
+            --extra-vars "rollback_commit=${{ github.event.inputs.rollback_commit }}"
