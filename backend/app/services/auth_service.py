@@ -1,10 +1,9 @@
 import re
 from typing import Dict, Any
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, timedelta, timezone
 
 from app.models import db, User, UserRole, UserProfile, CleanerProfile, ServiceType
-from app.services.jwt_service import generate_token, generate_2fa_temp_token
+from app.services.jwt_service import generate_2fa_temp_token
 from app.services.two_factor_service import TwoFactorService
 from app.services.email_service import EmailService
 

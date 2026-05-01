@@ -59,6 +59,8 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
       - name: Install backend dependencies
         working-directory: backend
@@ -66,12 +68,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run backend tests
+      - name: Run backend tests with coverage
         working-directory: backend
         env:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
           FLASK_ENV: testing
           PYTHONPATH: .
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: pytest --cov=app --cov-report=term-missing --cov-report=xml:coverage.xml
 
       - name: SonarCloud Scan

@@ -13,3 +13,4 @@ __pycache__/
 *.pyo
 frontend/.env.staging
 .env.staging
+.env.prod
