@@ -38,10 +38,6 @@ jobs:
           echo "[staging]" > inventory.ini
           echo "$EC2_HOST ansible_user=$EC2_USER ansible_port=$EC2_PORT ansible_ssh_private_key_file=~/.ssh/cleanmatch-key.pem" >> inventory.ini
 
-      - name: Add EC2 host key to known_hosts
-        run: |
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
       - name: Rollback staging
         run: |
           ansible-playbook -i inventory.ini ansible/rollback-staging.yml \
