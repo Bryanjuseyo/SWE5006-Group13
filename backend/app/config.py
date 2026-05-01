@@ -6,7 +6,7 @@ class Config:
     DEBUG = ENV == "development"
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
 
-    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "securepassword123")
+    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL',
         f'postgresql://cleanmatch_user:{DB_PASSWORD}@localhost:5432/cleanmatch'
