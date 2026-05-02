@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import AdminUsersPage from './AdminUsersPage';
 import * as adminApi from '../api/admin';
 
@@ -68,6 +69,111 @@ describe('AdminUsersPage', () => {
     render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Failed to load users.')).toBeInTheDocument();
+    });
+  });
+
+  it('renders Ban button for non-administrator user', async () => {
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [MOCK_USER], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^ban$/i })).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Ban button shows inline input and Confirm button', async () => {
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [MOCK_USER], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /^ban$/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /^ban$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/reason/i)).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Cancel in ban flow hides the ban input', async () => {
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [MOCK_USER], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /^ban$/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /^ban$/i }));
+    await waitFor(() => screen.getByRole('button', { name: /cancel/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^ban$/i })).toBeInTheDocument();
+    });
+  });
+
+  it('submitting ban form calls banUser', async () => {
+    const bannedUser: adminApi.AdminUser = { ...MOCK_USER, is_banned: true };
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [MOCK_USER], pagination: MOCK_PAGINATION });
+    vi.mocked(adminApi.banUser).mockResolvedValue({ message: 'Banned.', user: bannedUser });
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /^ban$/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /^ban$/i }));
+    await waitFor(() => screen.getByRole('button', { name: /confirm/i }));
+    await userEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    await waitFor(() => {
+      expect(adminApi.banUser).toHaveBeenCalledWith(MOCK_USER.id, 'admin-token', undefined);
+    });
+  });
+
+  it('renders Unban button for banned user', async () => {
+    const bannedUser: adminApi.AdminUser = { ...MOCK_USER, is_banned: true, ban_reason: 'Spam' };
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [bannedUser], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /unban/i })).toBeInTheDocument();
+    });
+  });
+
+  it('submitting search form triggers a new fetch', async () => {
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /search/i }));
+
+    await userEvent.type(screen.getByPlaceholderText(/search by email/i), 'alice');
+    await userEvent.click(screen.getByRole('button', { name: /search/i }));
+
+    await waitFor(() => {
+      expect(adminApi.getAdminUsers).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('shows pagination controls when has_next is true', async () => {
+    const pagedPagination = { page: 1, per_page: 25, total: 30, total_pages: 2, has_prev: false, has_next: true };
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [MOCK_USER], pagination: pagedPagination });
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /next/i }));
+
+    expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /previous/i })).toBeDisabled();
+  });
+});
+
+describe('AdminUsersPage – unban', () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('clicking Unban with confirmation calls unbanUser', async () => {
+    const bannedUser: adminApi.AdminUser = { ...MOCK_USER, is_banned: true };
+    const unbannedUser: adminApi.AdminUser = { ...MOCK_USER, is_banned: false };
+    vi.mocked(adminApi.getAdminUsers).mockResolvedValue({ users: [bannedUser], pagination: MOCK_PAGINATION });
+    vi.mocked(adminApi.unbanUser).mockResolvedValue({ message: 'Unbanned.', user: unbannedUser });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<MemoryRouter><AdminUsersPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /unban/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /unban/i }));
+
+    await waitFor(() => {
+      expect(adminApi.unbanUser).toHaveBeenCalledWith(bannedUser.id, 'admin-token');
     });
   });
 });

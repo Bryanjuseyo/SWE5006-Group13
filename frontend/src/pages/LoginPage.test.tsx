@@ -139,4 +139,72 @@ describe('LoginPage', () => {
       expect(screen.getByText('Incorrect OTP. Please try again.')).toBeInTheDocument();
     });
   });
+
+  it('calls verify2FA and navigates to /dashboard on successful OTP verification', async () => {
+    vi.mocked(authApi.login).mockResolvedValue({
+      message: 'OTP sent.',
+      requires_2fa: true,
+      temp_token: 'temp-123',
+    });
+    vi.mocked(authApi.verify2FA).mockResolvedValue({
+      message: 'ok',
+      token: 'jwt-abc',
+      user: { id: 1, email: 'u@test.com', role: 'end_user', created_at: '2024-01-01', two_factor_enabled: true },
+    });
+
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+    await userEvent.type(screen.getByRole('textbox'), 'u@test.com');
+    await userEvent.type(getPasswordInput(), 'Password1');
+    await userEvent.click(screen.getByRole('button', { name: /^login$/i }));
+    await waitFor(() => screen.getByRole('button', { name: /verify code/i }));
+
+    await userEvent.type(screen.getByRole('textbox'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: /verify code/i }));
+
+    await waitFor(() => {
+      expect(authApi.verify2FA).toHaveBeenCalledWith('123456', 'temp-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
+    });
+  });
+
+  it('shows resend success message when resend code succeeds', async () => {
+    vi.mocked(authApi.login).mockResolvedValue({
+      message: 'OTP sent.',
+      requires_2fa: true,
+      temp_token: 'temp-123',
+    });
+    vi.mocked(authApi.resend2FA).mockResolvedValue({ message: 'Resent.', temp_token: 'temp-456' });
+
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+    await userEvent.type(screen.getByRole('textbox'), 'u@test.com');
+    await userEvent.type(getPasswordInput(), 'Password1');
+    await userEvent.click(screen.getByRole('button', { name: /^login$/i }));
+    await waitFor(() => screen.getByRole('button', { name: /resend code/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /resend code/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('A new verification code has been sent to your email.')).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Back to login returns to the credentials form', async () => {
+    vi.mocked(authApi.login).mockResolvedValue({
+      message: 'OTP sent.',
+      requires_2fa: true,
+      temp_token: 'temp-123',
+    });
+
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+    await userEvent.type(screen.getByRole('textbox'), 'u@test.com');
+    await userEvent.type(getPasswordInput(), 'Password1');
+    await userEvent.click(screen.getByRole('button', { name: /^login$/i }));
+    await waitFor(() => screen.getByRole('button', { name: /back to login/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /back to login/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^login$/i })).toBeInTheDocument();
+    });
+  });
 });

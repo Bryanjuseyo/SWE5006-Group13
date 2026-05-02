@@ -70,4 +70,68 @@ describe('ProfilePage', () => {
       expect(screen.getByText(/first name and last name are required/i)).toBeInTheDocument();
     });
   });
+
+  it('populates first name field with value from fetched profile', async () => {
+    vi.mocked(profileApi.getMyProfile).mockResolvedValue(MOCK_PROFILE);
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /save profile/i }));
+
+    const inputs = document.querySelectorAll('input.form-control');
+    expect((inputs[0] as HTMLInputElement).value).toBe('Jane');
+  });
+
+  it('calls updateMyProfile when form is submitted with valid data', async () => {
+    vi.mocked(profileApi.getMyProfile).mockResolvedValue(MOCK_PROFILE);
+    vi.mocked(profileApi.updateMyProfile).mockResolvedValue({ message: 'Updated.', profile: MOCK_PROFILE.profile! });
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /save profile/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /save profile/i }));
+
+    await waitFor(() => {
+      expect(profileApi.updateMyProfile).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('shows success message after profile is saved', async () => {
+    vi.mocked(profileApi.getMyProfile).mockResolvedValue(MOCK_PROFILE);
+    vi.mocked(profileApi.updateMyProfile).mockResolvedValue({ message: 'Updated.', profile: MOCK_PROFILE.profile! });
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /save profile/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /save profile/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile saved.')).toBeInTheDocument();
+    });
+  });
+
+  it('shows phone validation error for a number that does not start with 8 or 9', async () => {
+    vi.mocked(profileApi.getMyProfile).mockResolvedValue(MOCK_PROFILE);
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /save profile/i }));
+
+    const inputs = document.querySelectorAll('input.form-control');
+    const phoneInput = inputs[2] as HTMLInputElement;
+    await userEvent.clear(phoneInput);
+    await userEvent.type(phoneInput, '12345678');
+    await userEvent.click(screen.getByRole('button', { name: /save profile/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/phone number must start with 8 or 9/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows error alert when save fails', async () => {
+    vi.mocked(profileApi.getMyProfile).mockResolvedValue(MOCK_PROFILE);
+    vi.mocked(profileApi.updateMyProfile).mockRejectedValue(new Error('Failed to save profile.'));
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /save profile/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /save profile/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to save profile.')).toBeInTheDocument();
+    });
+  });
 });
