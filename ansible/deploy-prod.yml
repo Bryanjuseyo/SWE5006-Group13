@@ -26,7 +26,7 @@
       shell: |
         docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T backend python -m scripts.seed_initial_data
       args:
-        chdir: ~/SWE5006-Group13
+        chdir: /home/ubuntu/SWE5006-Group13
 
     - name: Install CloudWatch agent
       shell: |
