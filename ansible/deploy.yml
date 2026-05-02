@@ -22,6 +22,12 @@
         cd /home/ubuntu/SWE5006-Group13
         docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --build
 
+    - name: Seed staging database
+      shell: |
+        docker compose --env-file .env.staging -f docker-compose.staging.yml exec -T backend python -m scripts.seed_initial_data
+      args:
+        chdir: ~/SWE5006-Group13
+        
     - name: Install CloudWatch agent
       shell: |
         wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
