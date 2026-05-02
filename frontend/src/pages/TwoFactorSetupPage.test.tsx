@@ -81,4 +81,68 @@ describe('TwoFactorSetupPage', () => {
       expect(screen.getByRole('button', { name: /enable 2fa/i })).toBeInTheDocument();
     });
   });
+
+  it('submitting OTP calls enable2FA', async () => {
+    vi.mocked(authApi.get2FAStatus).mockResolvedValue({ two_factor_enabled: false });
+    vi.mocked(authApi.setup2FA).mockResolvedValue({ message: 'OTP sent.' });
+    vi.mocked(authApi.enable2FA).mockResolvedValue({ message: '2FA enabled.' });
+    render(<MemoryRouter><TwoFactorSetupPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /send verification code/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /send verification code/i }));
+    await waitFor(() => screen.getByRole('button', { name: /enable 2fa/i }));
+
+    await userEvent.type(screen.getByPlaceholderText('000000'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: /enable 2fa/i }));
+
+    await waitFor(() => {
+      expect(authApi.enable2FA).toHaveBeenCalledWith('123456', 'test-token');
+    });
+  });
+
+  it('enable2FA failure shows error alert', async () => {
+    vi.mocked(authApi.get2FAStatus).mockResolvedValue({ two_factor_enabled: false });
+    vi.mocked(authApi.setup2FA).mockResolvedValue({ message: 'OTP sent.' });
+    vi.mocked(authApi.enable2FA).mockRejectedValue(new Error('Invalid OTP.'));
+    render(<MemoryRouter><TwoFactorSetupPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /send verification code/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /send verification code/i }));
+    await waitFor(() => screen.getByRole('button', { name: /enable 2fa/i }));
+
+    await userEvent.type(screen.getByPlaceholderText('000000'), '000000');
+    await userEvent.click(screen.getByRole('button', { name: /enable 2fa/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Invalid OTP.')).toBeInTheDocument();
+    });
+  });
+
+  it('submitting disable form calls disable2FA', async () => {
+    vi.mocked(authApi.get2FAStatus).mockResolvedValue({ two_factor_enabled: true });
+    vi.mocked(authApi.disable2FA).mockResolvedValue({ message: 'Disabled.' });
+    render(<MemoryRouter><TwoFactorSetupPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /disable 2fa/i }));
+
+    await userEvent.type(document.querySelector('input[type="password"]') as HTMLElement, 'MyPassword1');
+    await userEvent.click(screen.getByRole('button', { name: /disable 2fa/i }));
+
+    await waitFor(() => {
+      expect(authApi.disable2FA).toHaveBeenCalledWith('MyPassword1', 'test-token');
+    });
+  });
+
+  it('disable2FA failure shows error alert', async () => {
+    vi.mocked(authApi.get2FAStatus).mockResolvedValue({ two_factor_enabled: true });
+    vi.mocked(authApi.disable2FA).mockRejectedValue(new Error('Wrong password.'));
+    render(<MemoryRouter><TwoFactorSetupPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /disable 2fa/i }));
+
+    await userEvent.type(document.querySelector('input[type="password"]') as HTMLElement, 'wrong');
+    await userEvent.click(screen.getByRole('button', { name: /disable 2fa/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Wrong password.')).toBeInTheDocument();
+    });
+  });
 });

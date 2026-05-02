@@ -1,8 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import AdminDashboard from './AdminDashboard';
 import * as adminApi from '../api/admin';
+import type { JobRequest } from '../api/job_requests';
 
 vi.mock('../api/admin', () => ({
   getAdminStats: vi.fn(),
@@ -22,6 +24,26 @@ const MOCK_STATS: adminApi.DashboardStats = {
 };
 
 const MOCK_PAGINATION = { page: 1, per_page: 10, total: 0, total_pages: 0, has_prev: false, has_next: false };
+
+const MOCK_BOOKING: JobRequest = {
+  id: 7,
+  title: 'Office Clean',
+  description: '',
+  service_type: 'full',
+  location: '1 Raffles Place',
+  status: 'pending',
+  preferred_date: '2099-08-15',
+  preferred_time_start: null,
+  preferred_time_end: null,
+  end_user_id: 2,
+  cleaner_id: null,
+  cleaner: null,
+  end_user: { id: 2, email: 'user@test.com', role: 'end_user', created_at: '' },
+  is_in_priority_window: false,
+  priority_window_end: null,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+};
 
 describe('AdminDashboard', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -67,6 +89,38 @@ describe('AdminDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Manage Users')).toBeInTheDocument();
       expect(screen.getByText('Manage Bookings')).toBeInTheDocument();
+    });
+  });
+
+  it('renders recent booking rows when bookings are returned', async () => {
+    vi.mocked(adminApi.getAdminStats).mockResolvedValue(MOCK_STATS);
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [MOCK_BOOKING], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><AdminDashboard /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByText('Office Clean')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('AdminDashboard – reject', () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('clicking Reject with confirmation calls rejectBooking', async () => {
+    vi.mocked(adminApi.getAdminStats).mockResolvedValue(MOCK_STATS);
+    vi.mocked(adminApi.getAdminBookings).mockResolvedValue({ job_requests: [MOCK_BOOKING], pagination: MOCK_PAGINATION });
+    vi.mocked(adminApi.rejectBooking).mockResolvedValue({
+      message: 'Rejected.',
+      job_request: { ...MOCK_BOOKING, status: 'rejected' as const },
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<MemoryRouter><AdminDashboard /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /reject/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /reject/i }));
+
+    await waitFor(() => {
+      expect(adminApi.rejectBooking).toHaveBeenCalledWith(MOCK_BOOKING.id, 'admin-token');
     });
   });
 });
