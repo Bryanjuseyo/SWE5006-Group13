@@ -1,10 +1,5 @@
-import os
-import sys
 from datetime import date, time
 from decimal import Decimal
-
-# Allows this script to import from backend/app when run from backend/
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app import create_app
 from app.models import (
