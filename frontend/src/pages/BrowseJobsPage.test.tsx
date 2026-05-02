@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import BrowseJobsPage from './BrowseJobsPage';
@@ -87,6 +88,54 @@ describe('BrowseJobsPage', () => {
     render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Available Jobs')).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Accept Job calls updateJobStatus and navigates to /cleaner/schedule', async () => {
+    vi.mocked(storage.getUser).mockReturnValue({ id: 2, email: 'c@test.com', role: 'cleaner', created_at: '' });
+    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [MOCK_JOB], pagination: MOCK_PAGINATION });
+    vi.mocked(jobRequestsApi.updateJobStatus).mockResolvedValue({
+      message: 'ok',
+      job_request: { ...MOCK_JOB, status: 'confirmed' as const },
+    });
+    render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /accept job/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /accept job/i }));
+
+    await waitFor(() => {
+      expect(jobRequestsApi.updateJobStatus).toHaveBeenCalledWith(MOCK_JOB.id, 'confirmed', 'test-token');
+      expect(mockNavigate).toHaveBeenCalledWith('/cleaner/schedule');
+    });
+  });
+
+  it('renders job location in the card', async () => {
+    vi.mocked(storage.getUser).mockReturnValue({ id: 2, email: 'c@test.com', role: 'cleaner', created_at: '' });
+    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [MOCK_JOB], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByText('5 Raffles Place')).toBeInTheDocument();
+    });
+  });
+
+  it('shows Next button enabled and Previous button disabled on first page when has_next', async () => {
+    vi.mocked(storage.getUser).mockReturnValue({ id: 2, email: 'c@test.com', role: 'cleaner', created_at: '' });
+    const pagedPagination = { page: 1, per_page: 25, total: 30, total_pages: 2, has_prev: false, has_next: true };
+    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [MOCK_JOB], pagination: pagedPagination });
+    render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /next/i }));
+
+    expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /previous/i })).toBeDisabled();
+  });
+
+  it('shows Preferred badge when job cleaner_id matches the current user', async () => {
+    const preferredJob = { ...MOCK_JOB, cleaner_id: 2 };
+    vi.mocked(storage.getUser).mockReturnValue({ id: 2, email: 'c@test.com', role: 'cleaner', created_at: '' });
+    vi.mocked(jobRequestsApi.getAvailableJobs).mockResolvedValue({ job_requests: [preferredJob], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><BrowseJobsPage /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByText('Preferred')).toBeInTheDocument();
     });
   });
 });

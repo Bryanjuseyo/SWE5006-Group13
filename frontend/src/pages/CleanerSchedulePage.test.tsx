@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import CleanerSchedulePage from './CleanerSchedulePage';
 import * as jobRequestsApi from '../api/job_requests';
 
@@ -75,6 +76,79 @@ describe('CleanerSchedulePage', () => {
     render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /start job/i })).toBeInTheDocument();
+    });
+  });
+
+  it('renders Cancel Job button for confirmed jobs', async () => {
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /cancel job/i })).toBeInTheDocument();
+    });
+  });
+
+  it('renders Mark Complete button for in_progress jobs', async () => {
+    const inProgressJob = { ...MOCK_JOB, status: 'in_progress' as const };
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [inProgressJob], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /mark complete/i })).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Start Job calls updateJobStatus with in_progress', async () => {
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB], pagination: MOCK_PAGINATION });
+    vi.mocked(jobRequestsApi.updateJobStatus).mockResolvedValue({
+      message: 'ok',
+      job_request: { ...MOCK_JOB, status: 'in_progress' as const },
+    });
+    render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /start job/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /start job/i }));
+
+    await waitFor(() => {
+      expect(jobRequestsApi.updateJobStatus).toHaveBeenCalledWith(MOCK_JOB.id, 'in_progress', 'test-token');
+    });
+  });
+
+  it('shows pagination controls when has_next is true', async () => {
+    const pagedPagination = { page: 1, per_page: 25, total: 30, total_pages: 2, has_prev: false, has_next: true };
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB], pagination: pagedPagination });
+    render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /next/i }));
+
+    expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /previous/i })).toBeDisabled();
+  });
+
+  it('renders client email in the job card', async () => {
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB], pagination: MOCK_PAGINATION });
+    render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByText('user@test.com')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('CleanerSchedulePage – cancel', () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('clicking Cancel Job with confirmation calls updateJobStatus with cancelled', async () => {
+    vi.mocked(jobRequestsApi.getCleanerSchedule).mockResolvedValue({ schedule: [MOCK_JOB], pagination: MOCK_PAGINATION });
+    vi.mocked(jobRequestsApi.updateJobStatus).mockResolvedValue({
+      message: 'ok',
+      job_request: { ...MOCK_JOB, status: 'cancelled' as const },
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<MemoryRouter><CleanerSchedulePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /cancel job/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /cancel job/i }));
+
+    await waitFor(() => {
+      expect(jobRequestsApi.updateJobStatus).toHaveBeenCalledWith(MOCK_JOB.id, 'cancelled', 'test-token');
     });
   });
 });
