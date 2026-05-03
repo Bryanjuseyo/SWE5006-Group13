@@ -1,22 +1,11 @@
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
-
-sentry_sdk.init(
-    dsn="https://df65a16c44c5faa1650393aa13faf324@o4511162776813568.ingest.de.sentry.io/4511325958373456",
-    integrations=[FlaskIntegration()],
-    traces_sample_rate=1.0,
-)
-
 from flask import Flask
 from flask_migrate import Migrate
 from .config import Config
 from .extensions import cors
 from .models import db, bcrypt
-
 from flask_cors import CORS
-
-migrate = Migrate()
-
 from .api.health import bp as health_bp
 from app.api.auth import auth_bp
 from app.api.end_user.routes import end_user_bp
@@ -24,6 +13,14 @@ from app.api.cleaner.routes import cleaner_bp
 from app.api.admin.routes import admin_bp
 from app.api.profile import profile_bp
 from app.api.job_requests.routes import job_requests_bp
+
+sentry_sdk.init(
+    dsn="https://df65a16c44c5faa1650393aa13faf324@o4511162776813568.ingest.de.sentry.io/4511325958373456",
+    integrations=[FlaskIntegration()],
+    traces_sample_rate=1.0,
+)
+
+migrate = Migrate()
 
 
 def create_app():
