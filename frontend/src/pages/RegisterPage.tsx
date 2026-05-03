@@ -270,7 +270,8 @@ export default function RegisterPage() {
               >
                 <option value="end_user">End User</option>
                 <option value="cleaner">Cleaner</option>
-                <option value="administrator">Administrator</option>
+                {/* Commented out for prod */}
+                {/* <option value="administrator">Administrator</option>  */}
               </select>
               <div className="form-text">
                 (For demo/testing you can create an admin, but normally this would be restricted.)
