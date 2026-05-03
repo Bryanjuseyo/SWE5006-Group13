@@ -1,4 +1,3 @@
-from auth.test_routes import register_auth_test_routes
 import os
 import sys
 
@@ -22,6 +21,7 @@ atexit.register(_container.stop)
 
 from app.models import db as _db  # noqa: E402
 from app import create_app  # noqa: E402
+from auth.test_routes import register_auth_test_routes  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -66,19 +66,11 @@ def bearer_header():
 
 @pytest.fixture
 def patch_decode_token(mocker):
-    """
-    Patch app.api.auth.decorators.decode_token because decorators.py imported it directly.
-
-    Usage:
-      patch_decode_token(payload={...})
-      patch_decode_token(exc=ExpiredSignatureError())
-    """
     def _patch(payload=None, exc=None):
         targets = [
             "app.api.auth.decorators.decode_token",
             "app.api.cleaner.routes.decode_token",
         ]
-
         for target in targets:
             if exc is not None:
                 mocker.patch(target, side_effect=exc)

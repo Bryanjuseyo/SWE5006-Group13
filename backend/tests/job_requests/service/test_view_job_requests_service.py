@@ -4,12 +4,13 @@ View job requests - service layer tests.
 import pytest
 from app.services.job_request_service import JobRequestService
 from app.models import JobStatus, ServiceType
+from datetime import datetime, timezone, timedelta
 
 
 def test_view_not_found_raises_error(mocker):
     """Viewing non-existent job request should raise error."""
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.filter.return_value.first.return_value = None
+    mock_query.options.return_value.filter_by.return_value.filter.return_value.first.return_value = None
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -25,7 +26,7 @@ def test_end_user_view_other_user_request_raises_error(mocker):
     mock_job_request.cleaner_id = None
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
+    mock_query.options.return_value.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -39,10 +40,16 @@ def test_cleaner_can_view_unassigned_pending(mocker):
     mock_job_request = mocker.Mock()
     mock_job_request.cleaner_id = None
     mock_job_request.status = JobStatus.pending
-    mock_job_request.to_dict.return_value = {"id": 1, "status": "pending", "cleaner_id": None}
+    mock_job_request.priority_window_end = datetime.now(timezone.utc) + timedelta(hours=1)
+    mock_job_request.deleted_at = None
+    mock_job_request.to_dict.return_value = {
+        "id": 1,
+        "status": "pending",
+        "cleaner_id": None,
+    }
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
+    mock_query.options.return_value.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     result = JobRequestService.get_job_request(job_request_id=1, user_id=5, role="cleaner")
@@ -57,7 +64,7 @@ def test_cleaner_forbidden_for_other_cleaners_job_request(mocker):
     mock_job_request.status = JobStatus.confirmed
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
+    mock_query.options.return_value.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     with pytest.raises(ValueError) as e:
@@ -73,7 +80,7 @@ def test_get_success(mocker):
     mock_job_request.to_dict.return_value = {"id": 1, "title": "Test"}
 
     mock_query = mocker.Mock()
-    mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
+    mock_query.options.return_value.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
 
     result = JobRequestService.get_job_request(job_request_id=1, user_id=1, role="end_user")
@@ -100,10 +107,19 @@ def test_cleaner_get_job_requests_only_matching_service_type(mocker):
     mock_job_2.to_dict.return_value = {"id": 2, "service_type": "partial"}
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.filter.return_value.order_by.return_value.all.return_value = [
-        mock_job_1, mock_job_2
-    ]
+    mock_filtered_query = mocker.Mock()
+    mock_job_query.filter.return_value = mock_filtered_query
+    mock_filtered_query.filter.return_value = mock_filtered_query
+    mock_filtered_query.options.return_value = mock_filtered_query
+    mock_filtered_query.order_by.return_value = mock_filtered_query
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._paginate_query",
+        return_value=(
+            [mock_job_1, mock_job_2],
+            {"page": 1, "per_page": 25, "total": 2, "total_pages": 1, "has_prev": False, "has_next": False},
+        ),
+    )
 
     result = JobRequestService.get_job_requests(user_id=5, role="cleaner")
 
@@ -129,10 +145,19 @@ def test_cleaner_get_job_requests_no_profile_only_assigned_jobs(mocker):
     }
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.filter.return_value.order_by.return_value.all.return_value = [
-        mock_assigned_job
-    ]
+    mock_filtered_query = mocker.Mock()
+    mock_job_query.filter.return_value = mock_filtered_query
+    mock_filtered_query.filter.return_value = mock_filtered_query
+    mock_filtered_query.options.return_value = mock_filtered_query
+    mock_filtered_query.order_by.return_value = mock_filtered_query
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._paginate_query",
+        return_value=(
+            [mock_assigned_job],
+            {"page": 1, "per_page": 25, "total": 1, "total_pages": 1, "has_prev": False, "has_next": False},
+        ),
+    )
 
     result = JobRequestService.get_job_requests(user_id=5, role="cleaner")
 
@@ -149,7 +174,7 @@ def test_get_available_jobs_only_matching_service_type(mocker):
     mock_profile.availability = []
 
     mock_cleaner_profile_query = mocker.Mock()
-    mock_cleaner_profile_query.filter_by.return_value.first.return_value = mock_profile
+    mock_cleaner_profile_query.options.return_value.filter_by.return_value.first.return_value = mock_profile
     mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
 
     mock_job_1 = mocker.Mock()
@@ -159,7 +184,7 @@ def test_get_available_jobs_only_matching_service_type(mocker):
     mock_job_2.to_dict.return_value = {"id": 22, "service_type": "full", "status": "pending"}
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [
+    mock_job_query.options.return_value.filter.return_value.order_by.return_value.all.return_value = [
         mock_job_1, mock_job_2
     ]
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
@@ -169,19 +194,20 @@ def test_get_available_jobs_only_matching_service_type(mocker):
     assert len(result["job_requests"]) == 2
     assert result["job_requests"][0]["service_type"] == "full"
     assert result["job_requests"][1]["service_type"] == "full"
-    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+    mock_cleaner_profile_query.options.return_value.filter_by.assert_called_once_with(user_id=5)
 
 
 def test_get_available_jobs_no_cleaner_profile_returns_empty(mocker):
     """If cleaner has no profile, available jobs should be empty."""
     mock_cleaner_profile_query = mocker.Mock()
-    mock_cleaner_profile_query.filter_by.return_value.first.return_value = None
+    mock_cleaner_profile_query.options.return_value.filter_by.return_value.first.return_value = None
     mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
 
     result = JobRequestService.get_available_jobs(user_id=5)
 
-    assert result == {"job_requests": []}
-    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+    assert result["job_requests"] == []
+    assert result["pagination"]["total"] == 0
+    mock_cleaner_profile_query.options.return_value.filter_by.assert_called_once_with(user_id=5)
 
 
 def test_get_available_jobs_returns_jobs_within_availability(mocker):
@@ -197,7 +223,7 @@ def test_get_available_jobs_returns_jobs_within_availability(mocker):
     mock_profile.availability = [slot]
 
     mock_cleaner_profile_query = mocker.Mock()
-    mock_cleaner_profile_query.filter_by.return_value.first.return_value = mock_profile
+    mock_cleaner_profile_query.options.return_value.filter_by.return_value.first.return_value = mock_profile
     mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
 
     matching_job = mocker.Mock()
@@ -214,7 +240,7 @@ def test_get_available_jobs_returns_jobs_within_availability(mocker):
     }
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [matching_job]
+    mock_job_query.options.return_value.filter.return_value.order_by.return_value.all.return_value = [matching_job]
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
 
     result = JobRequestService.get_available_jobs(user_id=5)
@@ -222,7 +248,7 @@ def test_get_available_jobs_returns_jobs_within_availability(mocker):
     assert len(result["job_requests"]) == 1
     assert result["job_requests"][0]["id"] == 31
     assert result["job_requests"][0]["preferred_time_start"] == "10:00"
-    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+    mock_cleaner_profile_query.options.return_value.filter_by.assert_called_once_with(user_id=5)
 
 
 def test_get_available_jobs_excludes_jobs_outside_availability(mocker):
@@ -238,7 +264,7 @@ def test_get_available_jobs_excludes_jobs_outside_availability(mocker):
     mock_profile.availability = [slot]
 
     mock_cleaner_profile_query = mocker.Mock()
-    mock_cleaner_profile_query.filter_by.return_value.first.return_value = mock_profile
+    mock_cleaner_profile_query.options.return_value.filter_by.return_value.first.return_value = mock_profile
     mocker.patch("app.services.job_request_service.CleanerProfile.query", mock_cleaner_profile_query)
 
     outside_job = mocker.Mock()
@@ -255,13 +281,13 @@ def test_get_available_jobs_excludes_jobs_outside_availability(mocker):
     }
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [outside_job]
+    mock_job_query.options.return_value.filter.return_value.order_by.return_value.all.return_value = [outside_job]
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
 
     result = JobRequestService.get_available_jobs(user_id=5)
 
     assert result["job_requests"] == []
-    mock_cleaner_profile_query.filter_by.assert_called_once_with(user_id=5)
+    mock_cleaner_profile_query.options.return_value.filter_by.assert_called_once_with(user_id=5)
 
 
 def test_get_cleaner_schedule_returns_upcoming_confirmed_and_in_progress_jobs(mocker):
@@ -285,8 +311,17 @@ def test_get_cleaner_schedule_returns_upcoming_confirmed_and_in_progress_jobs(mo
     }
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [job_1, job_2]
+    mock_filtered_query = mocker.Mock()
+    mock_job_query.options.return_value.filter.return_value = mock_filtered_query
+    mock_filtered_query.order_by.return_value = mock_filtered_query
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._paginate_query",
+        return_value=(
+            [job_1, job_2],
+            {"page": 1, "per_page": 25, "total": 2, "total_pages": 1, "has_prev": False, "has_next": False},
+        ),
+    )
 
     result = JobRequestService.get_cleaner_schedule(user_id=5)
 
@@ -307,8 +342,17 @@ def test_get_cleaner_schedule_excludes_past_jobs(mocker):
     }
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [upcoming_job]
+    mock_filtered_query = mocker.Mock()
+    mock_job_query.options.return_value.filter.return_value = mock_filtered_query
+    mock_filtered_query.order_by.return_value = mock_filtered_query
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._paginate_query",
+        return_value=(
+            [upcoming_job],
+            {"page": 1, "per_page": 25, "total": 1, "total_pages": 1, "has_prev": False, "has_next": False},
+        ),
+    )
 
     result = JobRequestService.get_cleaner_schedule(user_id=5)
 
@@ -319,12 +363,22 @@ def test_get_cleaner_schedule_excludes_past_jobs(mocker):
 def test_get_cleaner_schedule_returns_empty_when_no_jobs(mocker):
     """Cleaner schedule should be empty when there are no upcoming jobs."""
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.order_by.return_value.all.return_value = []
+    mock_filtered_query = mocker.Mock()
+    mock_job_query.options.return_value.filter.return_value = mock_filtered_query
+    mock_filtered_query.order_by.return_value = mock_filtered_query
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._paginate_query",
+        return_value=(
+            [],
+            {"page": 1, "per_page": 25, "total": 0, "total_pages": 0, "has_prev": False, "has_next": False},
+        ),
+    )
 
     result = JobRequestService.get_cleaner_schedule(user_id=5)
 
-    assert result == {"schedule": []}
+    assert result["schedule"] == []
+    assert result["pagination"]["total"] == 0
 
 
 def test_get_cleaner_schedule_orders_by_date_then_start_time(mocker):
@@ -357,12 +411,17 @@ def test_get_cleaner_schedule_orders_by_date_then_start_time(mocker):
     }
 
     mock_job_query = mocker.Mock()
-    mock_job_query.filter.return_value.order_by.return_value.all.return_value = [
-        earlier_time_job,
-        later_time_job,
-        next_day_job,
-    ]
+    mock_filtered_query = mocker.Mock()
+    mock_job_query.options.return_value.filter.return_value = mock_filtered_query
+    mock_filtered_query.order_by.return_value = mock_filtered_query
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_job_query)
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._paginate_query",
+        return_value=(
+            [earlier_time_job, later_time_job, next_day_job],
+            {"page": 1, "per_page": 25, "total": 3, "total_pages": 1, "has_prev": False, "has_next": False},
+        ),
+    )
 
     result = JobRequestService.get_cleaner_schedule(user_id=5)
 

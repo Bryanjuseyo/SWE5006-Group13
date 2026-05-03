@@ -6,9 +6,16 @@ import {
   type ServiceType,
 } from '../api/job_requests';
 import { getToken, getUser } from '../auth/storage';
-import { listCleaners } from "../api/cleaners";
-import type { CleanerListItem } from "../api/cleaners";
+import { listCleaners } from '../api/cleaners';
+import type { CleanerListItem } from '../api/cleaners';
 import { autoAssignCleaner } from '../api/admin';
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
 
 export default function CreateJobRequestPage() {
   const navigate = useNavigate();
@@ -21,7 +28,7 @@ export default function CreateJobRequestPage() {
   const [preferredTimeStart, setPreferredTimeStart] = useState('');
   const [preferredTimeEnd, setPreferredTimeEnd] = useState('');
   const [cleaners, setCleaners] = useState<CleanerListItem[]>([]);
-  const [preferredCleanerId, setPreferredCleanerId] = useState<number | "">("");
+  const [preferredCleanerId, setPreferredCleanerId] = useState<number | ''>('');
   const [cleanerMode, setCleanerMode] = useState<'auto' | 'manual'>('auto');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,9 +43,8 @@ export default function CreateJobRequestPage() {
     }
     if (user?.role !== 'end_user') {
       navigate('/job-requests');
-      return;
     }
-  }, [token, user]);
+  }, [token, user, navigate]);
 
   useEffect(() => {
     let mounted = true;
@@ -46,8 +52,7 @@ export default function CreateJobRequestPage() {
       try {
         const res = await listCleaners();
         if (mounted) setCleaners(res.cleaners);
-      } catch (e) {
-        // optional: show toast/alert
+      } catch (e: unknown) {
         console.error(e);
       }
     })();
@@ -102,7 +107,10 @@ export default function CreateJobRequestPage() {
           preferred_date: preferredDate,
           preferred_time_start: preferredTimeStart || undefined,
           preferred_time_end: preferredTimeEnd || undefined,
-          cleaner_id: cleanerMode === 'manual' && preferredCleanerId !== "" ? preferredCleanerId : null,
+          cleaner_id:
+            cleanerMode === 'manual' && preferredCleanerId !== ''
+              ? preferredCleanerId
+              : null,
         },
         token!
       );
@@ -116,8 +124,8 @@ export default function CreateJobRequestPage() {
       }
 
       navigate('/job-requests', { replace: true });
-    } catch (err: any) {
-      setError(err?.message || 'Failed to create job request.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to create job request.'));
     } finally {
       setLoading(false);
     }
@@ -232,19 +240,25 @@ export default function CreateJobRequestPage() {
               />
             </div>
           </div>
+
           <div className="mb-3">
             <label className="form-label fw-semibold">Cleaner Selection</label>
             <div className="d-flex rounded overflow-hidden border mb-3" style={{ maxWidth: 360 }}>
               <button
                 type="button"
-                className={`btn flex-fill rounded-0 border-0 ${cleanerMode === 'auto' ? 'btn-primary' : 'btn-light'}`}
-                onClick={() => { setCleanerMode('auto'); setPreferredCleanerId(''); }}
+                className={`btn flex-fill rounded-0 border-0 ${cleanerMode === 'auto' ? 'btn-primary' : 'btn-light'
+                  }`}
+                onClick={() => {
+                  setCleanerMode('auto');
+                  setPreferredCleanerId('');
+                }}
               >
                 Auto-match
               </button>
               <button
                 type="button"
-                className={`btn flex-fill rounded-0 border-0 ${cleanerMode === 'manual' ? 'btn-primary' : 'btn-light'}`}
+                className={`btn flex-fill rounded-0 border-0 ${cleanerMode === 'manual' ? 'btn-primary' : 'btn-light'
+                  }`}
                 onClick={() => setCleanerMode('manual')}
               >
                 Choose a cleaner
@@ -253,7 +267,8 @@ export default function CreateJobRequestPage() {
 
             {cleanerMode === 'auto' ? (
               <div className="form-text">
-                We'll automatically match the best available cleaner based on your service type, date, and location.
+                We&apos;ll automatically match the best available cleaner based on your
+                service type, date, and location.
               </div>
             ) : (
               <>
@@ -262,15 +277,17 @@ export default function CreateJobRequestPage() {
                   value={preferredCleanerId}
                   onChange={(e) => {
                     const v = e.target.value;
-                    setPreferredCleanerId(v === "" ? "" : Number(v));
+                    setPreferredCleanerId(v === '' ? '' : Number(v));
                   }}
                 >
                   <option value="">Select a cleaner...</option>
                   {cleaners.map((c) => (
                     <option key={c.user_id} value={c.user_id}>
-                      {c.first_name} {c.last_name} • {c.cleaner_profile.service_type} •{" "}
-                      {c.cleaner_profile.hourly_rate != null ? `$${c.cleaner_profile.hourly_rate}/hr` : "Rate N/A"} •{" "}
-                      {c.cleaner_profile.years_experience} yrs
+                      {c.first_name} {c.last_name} • {c.cleaner_profile.service_type} •{' '}
+                      {c.cleaner_profile.hourly_rate != null
+                        ? `$${c.cleaner_profile.hourly_rate}/hr`
+                        : 'Rate N/A'}{' '}
+                      • {c.cleaner_profile.years_experience} yrs
                     </option>
                   ))}
                 </select>
@@ -280,6 +297,7 @@ export default function CreateJobRequestPage() {
               </>
             )}
           </div>
+
           <div className="d-flex gap-2">
             <button className="btn btn-primary" disabled={loading}>
               {loading ? 'Creating...' : 'Create job request'}
@@ -289,7 +307,6 @@ export default function CreateJobRequestPage() {
             </Link>
           </div>
         </form>
-
       </main>
     </>
   );

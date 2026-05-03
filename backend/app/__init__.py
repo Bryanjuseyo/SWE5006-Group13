@@ -7,6 +7,13 @@ sentry_sdk.init(
     traces_sample_rate=1.0,
 )
 
+from app.api.job_requests.routes import job_requests_bp
+from app.api.profile import profile_bp
+from app.api.admin.routes import admin_bp
+from app.api.cleaner.routes import cleaner_bp
+from app.api.end_user.routes import end_user_bp
+from app.api.auth import auth_bp
+from .api.health import bp as health_bp
 from flask import Flask
 from flask_migrate import Migrate
 from .config import Config
@@ -16,14 +23,6 @@ from .models import db, bcrypt
 from flask_cors import CORS
 
 migrate = Migrate()
-
-from .api.health import bp as health_bp
-from app.api.auth import auth_bp
-from app.api.end_user.routes import end_user_bp
-from app.api.cleaner.routes import cleaner_bp
-from app.api.admin.routes import admin_bp
-from app.api.profile import profile_bp
-from app.api.job_requests.routes import job_requests_bp
 
 
 def create_app():

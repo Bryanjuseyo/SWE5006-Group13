@@ -4,7 +4,7 @@ import { apiRequest } from './client';
 // TYPES
 // =============================================
 
-export type JobStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
+export type JobStatus = 'pending' | 'confirmed' | 'in_progress' | 'cleaner_completed' | 'completed' | 'cancelled' | 'rejected';
 export type ServiceType = 'partial' | 'full';
 
 export type JobRequest = {
@@ -62,8 +62,23 @@ export type JobRequestResponse = {
   job_request: JobRequest;
 };
 
+export type PaginationMeta = {
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
+  has_prev: boolean;
+  has_next: boolean;
+};
+
 export type JobRequestListResponse = {
   job_requests: JobRequest[];
+  pagination: PaginationMeta;
+};
+
+export type CleanerScheduleResponse = {
+  schedule: JobRequest[];
+  pagination: PaginationMeta;
 };
 
 // =============================================
@@ -89,10 +104,16 @@ export async function createJobRequest(
  */
 export async function getJobRequests(
   token: string,
-  status?: JobStatus
+  status?: JobStatus,
+  page?: number,
+  perPage?: number
 ): Promise<JobRequestListResponse> {
-  const query = status ? `?status=${status}` : '';
-  return apiRequest<JobRequestListResponse>(`/api/job-requests/${query}`, {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (page) params.set('page', String(page));
+  if (perPage) params.set('per_page', String(perPage));
+  const query = params.toString();
+  return apiRequest<JobRequestListResponse>(`/api/job-requests/${query ? `?${query}` : ''}`, {
     token,
   });
 }
@@ -155,14 +176,35 @@ export async function updateJobStatus(
 /**
  * Get cleaner's upcoming schedule (confirmed / in_progress jobs)
  */
-export async function getCleanerSchedule(token: string): Promise<{ schedule: JobRequest[] }> {
-  return apiRequest<{ schedule: JobRequest[] }>('/api/cleaner/schedule', { token });
+export async function getCleanerSchedule(
+  token: string,
+  page?: number,
+  perPage?: number
+): Promise<CleanerScheduleResponse> {
+  const params = new URLSearchParams();
+  if (page) params.set('page', String(page));
+  if (perPage) params.set('per_page', String(perPage));
+  const query = params.toString();
+  return apiRequest<CleanerScheduleResponse>(`/api/cleaner/schedule${query ? `?${query}` : ''}`, {
+    token,
+  });
 }
 
 /**
  * Get open jobs available for the cleaner to accept
  */
-export async function getAvailableJobs(token: string): Promise<JobRequestListResponse> {
-  return apiRequest<JobRequestListResponse>('/api/cleaner/available-jobs', { token });
+export async function getAvailableJobs(
+  token: string,
+  page?: number,
+  perPage?: number
+): Promise<JobRequestListResponse> {
+  const params = new URLSearchParams();
+  if (page) params.set('page', String(page));
+  if (perPage) params.set('per_page', String(perPage));
+  const query = params.toString();
+  return apiRequest<JobRequestListResponse>(
+    `/api/cleaner/available-jobs${query ? `?${query}` : ''}`,
+    { token }
+  );
 }
 

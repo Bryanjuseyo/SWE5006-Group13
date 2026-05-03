@@ -46,6 +46,15 @@ export type DashboardStats = {
   };
 };
 
+export type PaginationMeta = {
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
+  has_prev: boolean;
+  has_next: boolean;
+};
+
 export type CleanerMatch = {
   cleaner_id: number;
   email: string;
@@ -70,14 +79,19 @@ export async function getAdminStats(token: string): Promise<DashboardStats> {
 
 export async function getAdminUsers(
   token: string,
-  params?: { role?: string; banned?: string; search?: string }
-): Promise<{ users: AdminUser[] }> {
+  params?: { role?: string; banned?: string; search?: string; page?: number; perPage?: number }
+): Promise<{ users: AdminUser[]; pagination: PaginationMeta }> {
   const query = new URLSearchParams();
   if (params?.role) query.set('role', params.role);
   if (params?.banned) query.set('banned', params.banned);
   if (params?.search) query.set('search', params.search);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.perPage) query.set('per_page', String(params.perPage));
   const qs = query.toString();
-  return apiRequest<{ users: AdminUser[] }>(`/api/admin/users${qs ? `?${qs}` : ''}`, { token });
+  return apiRequest<{ users: AdminUser[]; pagination: PaginationMeta }>(
+    `/api/admin/users${qs ? `?${qs}` : ''}`,
+    { token }
+  );
 }
 
 export async function banUser(
@@ -109,15 +123,18 @@ export async function unbanUser(
 
 export async function getAdminBookings(
   token: string,
-  params?: { status?: string; search?: string }
-): Promise<{ job_requests: JobRequest[] }> {
+  params?: { status?: string; search?: string; page?: number; perPage?: number }
+): Promise<{ job_requests: JobRequest[]; pagination: PaginationMeta }> {
   const query = new URLSearchParams();
   if (params?.status) query.set('status', params.status);
   if (params?.search) query.set('search', params.search);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.perPage) query.set('per_page', String(params.perPage));
   const qs = query.toString();
-  return apiRequest<{ job_requests: JobRequest[] }>(`/api/admin/bookings${qs ? `?${qs}` : ''}`, {
-    token,
-  });
+  return apiRequest<{ job_requests: JobRequest[]; pagination: PaginationMeta }>(
+    `/api/admin/bookings${qs ? `?${qs}` : ''}`,
+    { token }
+  );
 }
 
 export async function rejectBooking(

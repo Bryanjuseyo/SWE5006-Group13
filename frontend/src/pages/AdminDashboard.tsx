@@ -49,6 +49,13 @@ const STATUS_DOT_COLORS: Record<string, string> = {
   rejected: '#e74c3c',
 };
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default function AdminDashboard() {
   const token = getToken();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -60,28 +67,33 @@ export default function AdminDashboard() {
     async function fetchData() {
       try {
         setLoading(true);
+        setError(null);
+
         const [statsData, bookingsData] = await Promise.all([
           getAdminStats(token!),
-          getAdminBookings(token!),
+          getAdminBookings(token!, { page: 1, perPage: 5 }),
         ]);
+
         setStats(statsData);
-        setRecentBookings(bookingsData.job_requests.slice(0, 5));
-      } catch (err: any) {
-        setError(err?.message || 'Failed to load dashboard.');
+        setRecentBookings(bookingsData.job_requests);
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to load dashboard.'));
       } finally {
         setLoading(false);
       }
     }
-    fetchData();
-  }, []);
+
+    void fetchData();
+  }, [token]);
 
   async function handleReject(id: number) {
     if (!confirm('Are you sure you want to reject this booking?')) return;
+
     try {
       const res = await rejectBooking(id, token!);
       setRecentBookings((prev) => prev.map((b) => (b.id === id ? res.job_request : b)));
-    } catch (err: any) {
-      alert(err?.message || 'Failed to reject booking.');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to reject booking.'));
     }
   }
 
@@ -102,7 +114,6 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {/* Navigation Cards */}
             <div className="row g-4 mb-5">
               {NAV_CARDS.map((card) => (
                 <div key={card.to} className="col-12 col-md-4">
@@ -121,22 +132,28 @@ export default function AdminDashboard() {
 
             {stats && (
               <>
-                {/* Users Stats */}
                 <h2 className="h5 fw-bold mb-3">Users</h2>
                 <div className="row g-3 mb-5">
                   {[
                     { label: 'Total Users', value: stats.users.total, borderColor: '#2563eb' },
-                    { label: 'End Users', value: stats.users.end_users, borderColor: '#3b82f6'},
-                    { label: 'Cleaners', value: stats.users.cleaners, borderColor: '#16a34a'},
-                    { label: 'Admins', value: stats.users.administrators, borderColor: '#dc2626'},
+                    { label: 'End Users', value: stats.users.end_users, borderColor: '#3b82f6' },
+                    { label: 'Cleaners', value: stats.users.cleaners, borderColor: '#16a34a' },
+                    { label: 'Admins', value: stats.users.administrators, borderColor: '#dc2626' },
                   ].map((item) => (
                     <div key={item.label} className="col-6 col-lg-3">
                       <div
                         className="card h-100"
-                        style={{ borderLeft: `4px solid ${item.borderColor}`, borderTop: 'none', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}
+                        style={{
+                          borderLeft: `4px solid ${item.borderColor}`,
+                          borderTop: 'none',
+                          borderRight: '1px solid #e5e7eb',
+                          borderBottom: '1px solid #e5e7eb',
+                        }}
                       >
                         <div className="card-body">
-                          <div className="text-muted small text-uppercase fw-semibold">{item.label}</div>
+                          <div className="text-muted small text-uppercase fw-semibold">
+                            {item.label}
+                          </div>
                           <div className="h2 fw-bold mb-0 mt-1">{item.value}</div>
                         </div>
                       </div>
@@ -144,7 +161,6 @@ export default function AdminDashboard() {
                   ))}
                 </div>
 
-                {/* Jobs & Bookings */}
                 <h2 className="h5 fw-bold mb-3">Jobs & Bookings</h2>
                 <div className="card shadow-sm mb-5">
                   <div className="card-body">
@@ -156,7 +172,6 @@ export default function AdminDashboard() {
                       </span>
                     </div>
 
-                    {/* Progress bar */}
                     {stats.jobs.total > 0 ? (
                       <div className="d-flex rounded overflow-hidden mb-3" style={{ height: 10 }}>
                         {[
@@ -166,21 +181,22 @@ export default function AdminDashboard() {
                           { key: 'completed', value: stats.jobs.completed },
                           { key: 'cancelled', value: stats.jobs.cancelled },
                           { key: 'rejected', value: stats.jobs.rejected },
-                        ].filter((s) => s.value > 0).map((s) => (
-                          <div
-                            key={s.key}
-                            style={{
-                              width: `${(s.value / stats.jobs.total) * 100}%`,
-                              backgroundColor: STATUS_DOT_COLORS[s.key],
-                            }}
-                          />
-                        ))}
+                        ]
+                          .filter((s) => s.value > 0)
+                          .map((s) => (
+                            <div
+                              key={s.key}
+                              style={{
+                                width: `${(s.value / stats.jobs.total) * 100}%`,
+                                backgroundColor: STATUS_DOT_COLORS[s.key],
+                              }}
+                            />
+                          ))}
                       </div>
                     ) : (
                       <div className="bg-light rounded mb-3" style={{ height: 10 }} />
                     )}
 
-                    {/* Legend */}
                     <div className="d-flex flex-wrap gap-3">
                       {[
                         { key: 'pending', value: stats.jobs.pending },
@@ -211,13 +227,10 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Recent Bookings Table */}
                 <h2 className="h5 fw-bold mb-3">Recent Bookings</h2>
                 <div className="card shadow-sm">
                   {recentBookings.length === 0 ? (
-                    <div className="card-body text-center text-muted py-4">
-                      No bookings yet.
-                    </div>
+                    <div className="card-body text-center text-muted py-4">No bookings yet.</div>
                   ) : (
                     <div className="table-responsive">
                       <table className="table table-hover align-middle mb-0">
@@ -229,16 +242,16 @@ export default function AdminDashboard() {
                             <th className="text-muted small text-uppercase fw-semibold">Service</th>
                             <th className="text-muted small text-uppercase fw-semibold">Status</th>
                             <th className="text-muted small text-uppercase fw-semibold">Date</th>
-                            <th className="text-muted small text-uppercase fw-semibold pe-3">Actions</th>
+                            <th className="text-muted small text-uppercase fw-semibold pe-3">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {recentBookings.map((b) => (
                             <tr key={b.id}>
                               <td className="ps-3 text-muted">#{b.id}</td>
-                              <td className="fw-medium">
-                                {b.title}
-                              </td>
+                              <td className="fw-medium">{b.title}</td>
                               <td className="text-muted">{b.end_user?.email || '-'}</td>
                               <td className="text-capitalize">{b.service_type}</td>
                               <td>
@@ -255,14 +268,16 @@ export default function AdminDashboard() {
                                   >
                                     View
                                   </Link>
-                                  {b.status !== 'completed' && b.status !== 'rejected' && b.status !== 'cancelled' && (
-                                    <button
-                                      className="btn btn-sm btn-outline-danger"
-                                      onClick={() => handleReject(b.id)}
-                                    >
-                                      Reject
-                                    </button>
-                                  )}
+                                  {b.status !== 'completed' &&
+                                    b.status !== 'rejected' &&
+                                    b.status !== 'cancelled' && (
+                                      <button
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={() => handleReject(b.id)}
+                                      >
+                                        Reject
+                                      </button>
+                                    )}
                                 </div>
                               </td>
                             </tr>

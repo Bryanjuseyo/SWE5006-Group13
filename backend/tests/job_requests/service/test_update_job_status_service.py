@@ -82,15 +82,23 @@ def test_end_user_cancel_no_cleaner_raises_error(mocker):
 def test_end_user_cancel_with_cleaner_success(mocker):
     """End user can cancel a confirmed job that has a cleaner assigned."""
     mock_job_request = mocker.Mock()
+    mock_job_request.id = 1
     mock_job_request.end_user_id = 1
     mock_job_request.cleaner_id = 5
     mock_job_request.status = JobStatus.confirmed
     mock_job_request.to_dict.return_value = {"id": 1, "status": "cancelled"}
+    mock_job_request.end_user = None
+    mock_job_request.cleaner = None
 
     mock_query = mocker.Mock()
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job_request,
+    )
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_cancellation_email")
 
     result = JobRequestService.update_job_status(
         job_request_id=1, user_id=1, role="end_user", new_status="cancelled"
@@ -103,15 +111,23 @@ def test_end_user_cancel_with_cleaner_success(mocker):
 def test_cleaner_claim_unassigned_job_success(mocker):
     """Cleaner can claim an unassigned pending job"""
     mock_job_request = mocker.Mock()
+    mock_job_request.id = 1
     mock_job_request.end_user_id = 2
     mock_job_request.cleaner_id = None  # unassigned
     mock_job_request.status = JobStatus.pending
     mock_job_request.to_dict.return_value = {"id": 1, "status": "confirmed", "cleaner_id": 5}
+    mock_job_request.end_user = None
+    mock_job_request.cleaner = None
 
     mock_query = mocker.Mock()
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job_request,
+    )
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_confirmation_email")
 
     result = JobRequestService.update_job_status(
         job_request_id=1, user_id=5, role="cleaner", new_status="confirmed"
@@ -165,6 +181,7 @@ def test_cleaner_cannot_skip_to_completed_on_unassigned(mocker):
 def test_cleaner_start_job_success(mocker):
     """Cleaner can move a confirmed job to in_progress."""
     mock_job_request = mocker.Mock()
+    mock_job_request.id = 1
     mock_job_request.cleaner_id = 5
     mock_job_request.status = JobStatus.confirmed
     mock_job_request.to_dict.return_value = {"id": 1, "status": "in_progress"}
@@ -173,6 +190,10 @@ def test_cleaner_start_job_success(mocker):
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job_request,
+    )
 
     result = JobRequestService.update_job_status(
         job_request_id=1, user_id=5, role="cleaner", new_status="in_progress"
@@ -185,14 +206,22 @@ def test_cleaner_start_job_success(mocker):
 def test_cleaner_cancel_confirmed_job_success(mocker):
     """Cleaner can cancel a confirmed job that has not started yet."""
     mock_job_request = mocker.Mock()
+    mock_job_request.id = 1
     mock_job_request.cleaner_id = 5
     mock_job_request.status = JobStatus.confirmed
     mock_job_request.to_dict.return_value = {"id": 1, "status": "cancelled"}
+    mock_job_request.end_user = None
+    mock_job_request.cleaner = None
 
     mock_query = mocker.Mock()
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job_request,
+    )
+    mocker.patch("app.services.job_event_listeners.EmailService.send_booking_cancellation_email")
 
     result = JobRequestService.update_job_status(
         job_request_id=1,
@@ -247,20 +276,25 @@ def test_cleaner_invalid_transition(mocker):
 
 
 def test_cleaner_complete_job_success(mocker):
-    """Cleaner can mark an in_progress job as completed."""
+    """Cleaner can mark an in_progress job as cleaner_completed."""
     mock_job_request = mocker.Mock()
+    mock_job_request.id = 1
     mock_job_request.cleaner_id = 5
     mock_job_request.status = JobStatus.in_progress
-    mock_job_request.to_dict.return_value = {"id": 1, "status": "completed"}
+    mock_job_request.to_dict.return_value = {"id": 1, "status": "cleaner_completed"}
 
     mock_query = mocker.Mock()
     mock_query.filter_by.return_value.filter.return_value.first.return_value = mock_job_request
     mocker.patch("app.services.job_request_service.JobRequest.query", mock_query)
     mocker.patch("app.services.job_request_service.db.session")
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job_request,
+    )
 
     result = JobRequestService.update_job_status(
-        job_request_id=1, user_id=5, role="cleaner", new_status="completed"
+        job_request_id=1, user_id=5, role="cleaner", new_status="cleaner_completed"
     )
 
     assert "completed" in result["message"]
-    assert mock_job_request.status == JobStatus.completed
+    assert mock_job_request.status == JobStatus.cleaner_completed

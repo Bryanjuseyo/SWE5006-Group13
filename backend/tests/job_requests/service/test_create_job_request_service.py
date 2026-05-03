@@ -201,6 +201,7 @@ def test_create_success(mocker):
     mock_session = mocker.patch("app.services.job_request_service.db.session")
 
     mock_job_request = mocker.Mock()
+    mock_job_request.id = 1
     mock_job_request.to_dict.return_value = {
         "id": 1,
         "end_user_id": 1,
@@ -212,6 +213,10 @@ def test_create_success(mocker):
         "cleaner_id": 1
     }
     mocker.patch("app.services.job_request_service.JobRequest", return_value=mock_job_request)
+    mocker.patch(
+        "app.services.job_request_service.JobRequestService._get_job_request_with_relationships",
+        return_value=mock_job_request,
+    )
 
     result = JobRequestService.create_job_request(
         end_user_id=1,
