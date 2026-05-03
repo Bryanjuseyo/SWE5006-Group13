@@ -52,4 +52,3 @@ def create_app():
     app.register_blueprint(job_requests_bp, url_prefix="/api/job-requests")
 
     return app
-    
