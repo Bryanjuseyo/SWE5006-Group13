@@ -1,3 +1,12 @@
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+
+sentry_sdk.init(
+    dsn="https://df65a16c44c5faa1650393aa13faf324@o4511162776813568.ingest.de.sentry.io/4511325958373456",
+    integrations=[FlaskIntegration()],
+    traces_sample_rate=1.0,
+)
+
 from app.api.job_requests.routes import job_requests_bp
 from app.api.profile import profile_bp
 from app.api.admin.routes import admin_bp
