@@ -94,4 +94,5 @@ jobs:
         with:
           target: ${{ secrets.STAGING_URL }}
           fail_action: false
+          allow_issue_writing: false
           
