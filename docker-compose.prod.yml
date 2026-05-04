@@ -40,6 +40,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN}
+        VITE_APP_ENV: ${VITE_APP_ENV}
     container_name: cleanmatch-frontend
     ports:
       - "80:80"
