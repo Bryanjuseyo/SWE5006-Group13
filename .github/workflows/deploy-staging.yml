@@ -92,6 +92,6 @@ jobs:
       - name: Run OWASP ZAP Baseline Scan on Staging
         uses: zaproxy/action-baseline@v0.13.0
         with:
-          target: ${{ secrets.EC2_HOST }}
+          target: ${{ secrets.STAGING_URL }}
           fail_action: false
           

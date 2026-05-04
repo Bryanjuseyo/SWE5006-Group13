@@ -91,5 +91,5 @@ jobs:
       - name: Run OWASP ZAP Baseline Scan on Production
         uses: zaproxy/action-baseline@v0.13.0
         with:
-          target: ${{ secrets.PROD_EC2_HOST }}
+          target: ${{ secrets.PROD_URL }}
           fail_action: false
