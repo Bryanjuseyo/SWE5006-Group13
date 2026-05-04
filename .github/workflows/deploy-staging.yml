@@ -89,11 +89,23 @@ jobs:
     needs: deploy
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Run OWASP ZAP Baseline Scan on Staging
-        uses: zaproxy/action-baseline@v0.13.0
-        with:
-          target: ${{ secrets.STAGING_URL }}
-          fail_action: false
-          allow_issue_writing: false
-          artifact_name: zapscanstaging
+        run: |
+          docker run --rm \
+            --network=host \
+            -v ${{ github.workspace }}:/zap/wrk/:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://${{ secrets.STAGING_URL }} \
+            -J zap-report.json \
+            -w zap-report.md \
+            -r zap-report.html \
+            || true
+
+      - name: Show ZAP Markdown Report
+        run: |
+          cat zap-report.md || true
           
