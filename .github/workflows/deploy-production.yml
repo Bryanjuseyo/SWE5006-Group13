@@ -94,3 +94,4 @@ jobs:
           target: ${{ secrets.PROD_URL }}
           fail_action: false
           allow_issue_writing: false
+          artifact_name: zapscan-production
