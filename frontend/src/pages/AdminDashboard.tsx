@@ -4,8 +4,18 @@ import Navbar from '../components/Navbar';
 import { getAdminStats, getAdminBookings, rejectBooking, type DashboardStats } from '../api/admin';
 import { getToken } from '../auth/storage';
 import type { JobRequest } from '../api/job_requests';
+import * as Sentry from '@sentry/react';
 
-const NAV_CARDS = [
+type NavCard = {
+  to: string;
+  title: string;
+  description: string;
+  btnLabel: string;
+  btnClass: string;
+  testError?: boolean;
+};
+
+const NAV_CARDS: NavCard[] = [
   {
     to: '/admin/users',
     title: 'Manage Users',
@@ -19,6 +29,14 @@ const NAV_CARDS = [
     description: 'View all job requests and bookings. Reject suspicious or fraudulent entries.',
     btnLabel: 'View Bookings',
     btnClass: 'btn-outline-dark',
+  },
+  {
+    to: '#',
+    title: 'Test Monitoring',
+    description: 'Trigger a test frontend error to verify Sentry application monitoring.',
+    btnLabel: 'Trigger Error',
+    btnClass: 'btn-outline-danger',
+    testError: true,
   },
 ];
 
@@ -116,14 +134,28 @@ export default function AdminDashboard() {
           <>
             <div className="row g-4 mb-5">
               {NAV_CARDS.map((card) => (
-                <div key={card.to} className="col-12 col-md-4">
+                <div key={card.title} className="col-12 col-md-4">
                   <div className="card h-100 shadow-sm">
                     <div className="card-body d-flex flex-column">
                       <h5 className="card-title fw-semibold">{card.title}</h5>
                       <p className="card-text text-muted flex-grow-1">{card.description}</p>
-                      <Link to={card.to} className={`btn ${card.btnClass} mt-2 align-self-start`}>
-                        {card.btnLabel}
-                      </Link>
+
+                      {card.testError ? (
+                        <button
+                          type="button"
+                          className={`btn ${card.btnClass} mt-2 align-self-start`}
+                          onClick={() => {
+                            Sentry.captureException(new Error('Sentry frontend monitoring test error'));
+                            throw new Error('Sentry frontend monitoring test error');
+                          }}
+                        >
+                          {card.btnLabel}
+                        </button>
+                      ) : (
+                        <Link to={card.to} className={`btn ${card.btnClass} mt-2 align-self-start`}>
+                          {card.btnLabel}
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>
