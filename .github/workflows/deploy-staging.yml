@@ -95,5 +95,5 @@ jobs:
           target: ${{ secrets.STAGING_URL }}
           fail_action: false
           allow_issue_writing: false
-          artifact_name: zapscan-staging
+          artifact_name: zapscanstaging
           
