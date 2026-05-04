@@ -102,7 +102,7 @@ jobs:
             -v ${{ github.workspace }}:/zap/wrk/:rw \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
-            -t http://${{ secrets.STAGING_URL }} \
+            -t http://${{ secrets.EC2_HOST }} \
             -J zap-report.json \
             -w zap-report.md \
             -r zap-report.html \
