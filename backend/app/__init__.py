@@ -1,3 +1,4 @@
+import os
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from flask import Flask
@@ -14,11 +15,15 @@ from app.api.admin.routes import admin_bp
 from app.api.profile import profile_bp
 from app.api.job_requests.routes import job_requests_bp
 
-sentry_sdk.init(
-    dsn="https://df65a16c44c5faa1650393aa13faf324@o4511162776813568.ingest.de.sentry.io/4511325958373456",
-    integrations=[FlaskIntegration()],
-    traces_sample_rate=1.0,
-)
+sentry_dsn = os.getenv("SENTRY_DSN")
+
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        integrations=[FlaskIntegration()],
+        environment=os.getenv("SENTRY_ENV", "production"),
+        traces_sample_rate=1.0,
+    )
 
 migrate = Migrate()
 
