@@ -92,6 +92,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Allow ZAP container to write reports
+        run: chmod -R 777 ${{ github.workspace }}
+
       - name: Run OWASP ZAP Baseline Scan on Staging
         run: |
           docker run --rm \
@@ -108,4 +111,3 @@ jobs:
       - name: Show ZAP Markdown Report
         run: |
           cat zap-report.md || true
-          
