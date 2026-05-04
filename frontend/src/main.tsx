@@ -11,7 +11,7 @@ import App from './app/App';
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
-  sendDefaultPii: true,
+  environment: import.meta.env.VITE_APP_ENV || 'production',
 });
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -7,6 +7,12 @@ RUN npm ci
 
 COPY . .
 COPY .env.prod .env
+ARG VITE_SENTRY_DSN
+ARG VITE_APP_ENV
+
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+ENV VITE_APP_ENV=$VITE_APP_ENV
+
 RUN npm run build
 
 FROM nginx:stable-alpine
