@@ -27,8 +27,6 @@ export function useEligibleCleaners({
     let mounted = true;
 
     if (!canLoadCleaners) {
-      setCleaners([]);
-      setPreferredCleanerId('');
       return () => {
         mounted = false;
       };
@@ -73,8 +71,8 @@ export function useEligibleCleaners({
   ]);
 
   return {
-    cleaners,
-    preferredCleanerId,
+    cleaners: canLoadCleaners ? cleaners : [],
+    preferredCleanerId: canLoadCleaners ? preferredCleanerId : '',
     setPreferredCleanerId,
     canLoadCleaners,
   };

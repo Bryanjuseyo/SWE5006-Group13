@@ -109,6 +109,10 @@ export default function EditJobRequestPage() {
       setError(validationError);
       return;
     }
+    if (!serviceType) {
+      setError('Service type is required.');
+      return;
+    }
 
     try {
       setSaving(true);
