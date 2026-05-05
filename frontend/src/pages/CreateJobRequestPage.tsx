@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import JobRequestFormFields from '../components/JobRequestFormFields';
 import Navbar from '../components/Navbar';
+import PreferredCleanerSelect from '../components/PreferredCleanerSelect';
 import {
   createJobRequest,
   type ServiceType,
 } from '../api/job_requests';
 import { getToken, getUser } from '../auth/storage';
-import { listCleaners } from '../api/cleaners';
-import type { CleanerListItem } from '../api/cleaners';
 import { autoAssignCleaner } from '../api/admin';
+import { useEligibleCleaners } from '../hooks/useEligibleCleaners';
+import { getJobRequestFormError } from '../utils/jobRequestForm';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
@@ -27,8 +29,6 @@ export default function CreateJobRequestPage() {
   const [preferredDate, setPreferredDate] = useState('');
   const [preferredTimeStart, setPreferredTimeStart] = useState('');
   const [preferredTimeEnd, setPreferredTimeEnd] = useState('');
-  const [cleaners, setCleaners] = useState<CleanerListItem[]>([]);
-  const [preferredCleanerId, setPreferredCleanerId] = useState<number | ''>('');
   const [cleanerMode, setCleanerMode] = useState<'auto' | 'manual'>('auto');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,75 +49,34 @@ export default function CreateJobRequestPage() {
   const today = new Date().toISOString().split('T')[0];
   const now = new Date();
   const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const canLoadCleaners = Boolean(serviceType && preferredDate);
-
-  useEffect(() => {
-    let mounted = true;
-
-    if (!canLoadCleaners) {
-      setCleaners([]);
-      setPreferredCleanerId('');
-      return () => {
-        mounted = false;
-      };
-    }
-
-    (async () => {
-      try {
-        const res = await listCleaners({
-          service_type: serviceType as ServiceType,
-          preferred_date: preferredDate,
-          preferred_time_start: preferredTimeStart || undefined,
-          preferred_time_end: preferredTimeEnd || undefined,
-        });
-        if (!mounted) return;
-
-        setCleaners(res.cleaners);
-        setPreferredCleanerId((current) => (
-          current !== '' && !res.cleaners.some((c) => c.user_id === current) ? '' : current
-        ));
-      } catch (e: unknown) {
-        console.error(e);
-        if (mounted) {
-          setCleaners([]);
-          setPreferredCleanerId('');
-        }
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [canLoadCleaners, serviceType, preferredDate, preferredTimeStart, preferredTimeEnd]);
+  const {
+    cleaners,
+    preferredCleanerId,
+    setPreferredCleanerId,
+    canLoadCleaners,
+  } = useEligibleCleaners({
+    serviceType,
+    preferredDate,
+    preferredTimeStart,
+    preferredTimeEnd,
+  });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!title.trim()) {
-      setError('Title is required.');
-      return;
-    }
-    if (!serviceType) {
-      setError('Service type is required.');
-      return;
-    }
-    if (!location.trim()) {
-      setError('Location is required.');
-      return;
-    }
-    if (!preferredDate) {
-      setError('Preferred date is required.');
-      return;
-    }
-
-    if (preferredTimeStart && preferredDate === today && preferredTimeStart < currentTime) {
-      setError('Start time cannot be in the past.');
-      return;
-    }
-
-    if (preferredTimeStart && preferredTimeEnd && preferredTimeEnd <= preferredTimeStart) {
-      setError('End time must be strictly after start time.');
+    const validationError = getJobRequestFormError({
+      title,
+      serviceType,
+      location,
+      preferredDate,
+      preferredTimeStart,
+      preferredTimeEnd,
+      today,
+      currentTime,
+    });
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -174,97 +133,24 @@ export default function CreateJobRequestPage() {
         {error && <div className="alert alert-danger">{error}</div>}
 
         <form onSubmit={onSubmit} className="card p-4 shadow-sm">
-          <div className="mb-3">
-            <label className="form-label">
-              Title <span className="text-danger">*</span>
-            </label>
-            <input
-              className="form-control"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Weekly house cleaning"
-              required
-            />
-          </div>
-
-          <div className="mb-3">
-            <label className="form-label">Description</label>
-            <textarea
-              className="form-control"
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe your cleaning requirements..."
-            />
-          </div>
-
-          <div className="row mb-3">
-            <div className="col-md-6">
-              <label className="form-label">
-                Service Type <span className="text-danger">*</span>
-              </label>
-              <select
-                className="form-select"
-                value={serviceType}
-                onChange={(e) => setServiceType(e.target.value as ServiceType | '')}
-                required
-              >
-                <option value="">Select type...</option>
-                <option value="partial">Partial Cleaning</option>
-                <option value="full">Full Cleaning</option>
-              </select>
-            </div>
-            <div className="col-md-6">
-              <label className="form-label">
-                Location <span className="text-danger">*</span>
-              </label>
-              <input
-                className="form-control"
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g., 123 Main St, Singapore"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="row mb-3">
-            <div className="col-md-4">
-              <label className="form-label">
-                Preferred Date <span className="text-danger">*</span>
-              </label>
-              <input
-                className="form-control"
-                type="date"
-                value={preferredDate}
-                onChange={(e) => setPreferredDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                required
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Start Time</label>
-              <input
-                className="form-control"
-                type="time"
-                value={preferredTimeStart}
-                onChange={(e) => setPreferredTimeStart(e.target.value)}
-                min={preferredDate === today ? currentTime : undefined}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">End Time</label>
-              <input
-                className="form-control"
-                type="time"
-                value={preferredTimeEnd}
-                onChange={(e) => setPreferredTimeEnd(e.target.value)}
-                min={preferredTimeStart || undefined}
-              />
-            </div>
-          </div>
+          <JobRequestFormFields
+            title={title}
+            description={description}
+            serviceType={serviceType}
+            location={location}
+            preferredDate={preferredDate}
+            preferredTimeStart={preferredTimeStart}
+            preferredTimeEnd={preferredTimeEnd}
+            today={today}
+            currentTime={currentTime}
+            onTitleChange={setTitle}
+            onDescriptionChange={setDescription}
+            onServiceTypeChange={setServiceType}
+            onLocationChange={setLocation}
+            onPreferredDateChange={setPreferredDate}
+            onPreferredTimeStartChange={setPreferredTimeStart}
+            onPreferredTimeEndChange={setPreferredTimeEnd}
+          />
 
           <div className="mb-3">
             <label className="form-label fw-semibold">Cleaner Selection</label>
@@ -296,37 +182,14 @@ export default function CreateJobRequestPage() {
                 service type, date, and location.
               </div>
             ) : (
-              <>
-                <select
-                  className="form-select"
-                  value={preferredCleanerId}
-                  disabled={!canLoadCleaners}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setPreferredCleanerId(v === '' ? '' : Number(v));
-                  }}
-                >
-                  <option value="">
-                    {!canLoadCleaners
-                      ? 'Select service type and date first'
-                      : cleaners.length === 0
-                        ? 'No eligible cleaners available'
-                        : 'Select a cleaner...'}
-                  </option>
-                  {cleaners.map((c) => (
-                    <option key={c.user_id} value={c.user_id}>
-                      {c.first_name} {c.last_name} - {c.cleaner_profile.service_type} -{' '}
-                      {c.cleaner_profile.hourly_rate != null
-                        ? `$${c.cleaner_profile.hourly_rate}/hr`
-                        : 'Rate N/A'}{' '}
-                      - {c.cleaner_profile.years_experience} yrs
-                    </option>
-                  ))}
-                </select>
-                <div className="form-text">
-                  Only showing cleaners that match the service type, availability, and booking schedule.
-                </div>
-              </>
+              <PreferredCleanerSelect
+                cleaners={cleaners}
+                value={preferredCleanerId}
+                canLoadCleaners={canLoadCleaners}
+                emptyOptionLabel="Select a cleaner..."
+                helperText="Only showing cleaners that match the service type, availability, and booking schedule."
+                onChange={setPreferredCleanerId}
+              />
             )}
           </div>
 
