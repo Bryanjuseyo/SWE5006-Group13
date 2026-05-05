@@ -79,6 +79,10 @@ export default function CreateJobRequestPage() {
       setError(validationError);
       return;
     }
+    if (!serviceType) {
+      setError('Service type is required.');
+      return;
+    }
 
     try {
       setLoading(true);
