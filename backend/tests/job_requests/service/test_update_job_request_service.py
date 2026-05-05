@@ -186,7 +186,7 @@ def test_update_job_request_can_set_cleaner_when_pending(app, mocker, make_user)
     job = _create_job(db, JobRequest, JobStatus, owner.id, JobStatus.pending)
 
     mocker.patch(
-        "app.services.job_request_service.JobRequestService._validate_cleaner_id",
+        "app.services.job_request_service.JobRequestService._validate_preferred_cleaner",
         return_value=cleaner.id
     )
 
@@ -247,7 +247,7 @@ def test_update_job_request_invalid_cleaner_id(app, mocker, make_user):
     job = _create_job(db, JobRequest, JobStatus, owner.id, JobStatus.pending)
 
     mocker.patch(
-        "app.services.job_request_service.JobRequestService._validate_cleaner_id",
+        "app.services.job_request_service.JobRequestService._validate_preferred_cleaner",
         side_effect=ValueError("invalid_cleaner|Cleaner not found.")
     )
 

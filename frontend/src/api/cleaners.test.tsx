@@ -56,6 +56,27 @@ describe('cleaners API', () => {
     expect(opts.body).toBeUndefined();
   });
 
+  it('listCleaners appends eligibility filters to the query string', async () => {
+    const fetchMock = mockFetch(200, { cleaners: [] });
+
+    await listCleaners({
+      service_type: 'full',
+      preferred_date: '2099-12-31',
+      preferred_time_start: '10:00',
+      preferred_time_end: '12:00',
+      exclude_job_request_id: 42,
+    });
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const requestUrl = new URL(url, 'http://localhost');
+    expect(requestUrl.pathname).toBe('/api/cleaner/list');
+    expect(requestUrl.searchParams.get('service_type')).toBe('full');
+    expect(requestUrl.searchParams.get('preferred_date')).toBe('2099-12-31');
+    expect(requestUrl.searchParams.get('preferred_time_start')).toBe('10:00');
+    expect(requestUrl.searchParams.get('preferred_time_end')).toBe('12:00');
+    expect(requestUrl.searchParams.get('exclude_job_request_id')).toBe('42');
+  });
+
   it('listCleaners throws with server error message on failure', async () => {
     mockFetch(500, { message: 'Internal server error.' });
     await expect(listCleaners()).rejects.toThrow('Internal server error.');

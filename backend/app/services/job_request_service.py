@@ -17,6 +17,10 @@ from app.services.job_request_commands import (
 from app.services.job_request_states import JobRequestStateFactory
 from app.services.job_event_publisher import JobEventPublisher
 from app.services.job_event_listeners import EmailNotificationListener
+from app.services.cleaner_eligibility import (
+    has_booking_conflict,
+    schedule_fits_availability,
+)
 
 
 class JobRequestService:
@@ -162,9 +166,15 @@ class JobRequestService:
         if start_time and end_time and end_time <= start_time:
             raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
 
-        # Validate cleaner
+        # Validate preferred cleaner against the final requested job details.
         if "cleaner_id" in updates:
-            updates["cleaner_id"] = JobRequestService._validate_cleaner_id(updates.get("cleaner_id"))
+            updates["cleaner_id"] = JobRequestService._validate_preferred_cleaner(
+                updates.get("cleaner_id"),
+                updates["service_type"],
+                updates["preferred_date"],
+                updates.get("preferred_time_start"),
+                updates.get("preferred_time_end"),
+            )
 
         # Set priority window if a preferred cleaner is selected
         priority_window_end = None
@@ -291,11 +301,46 @@ class JobRequestService:
         if start_time and end_time and end_time <= start_time:
             raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
 
+        current_cleaner_id = job_request.cleaner_id
+
         # Validate cleaner
         if "cleaner_id" in updates:
             if job_request.status != JobStatus.pending:
                 raise ValueError("invalid_status|Cannot change preferred cleaner unless job is pending.")
-            updates["cleaner_id"] = JobRequestService._validate_cleaner_id(updates.get("cleaner_id"))
+            current_cleaner_id = updates.get("cleaner_id")
+
+        effective_cleaner_id = current_cleaner_id
+        effective_service_type = updates.get("service_type", job_request.service_type)
+        effective_preferred_date = updates.get("preferred_date", job_request.preferred_date)
+        effective_preferred_time_start = updates.get(
+            "preferred_time_start",
+            job_request.preferred_time_start,
+        )
+        effective_preferred_time_end = updates.get(
+            "preferred_time_end",
+            job_request.preferred_time_end,
+        )
+
+        eligibility_fields = {
+            "cleaner_id",
+            "service_type",
+            "preferred_date",
+            "preferred_time_start",
+            "preferred_time_end",
+        }
+        should_validate_cleaner = bool(eligibility_fields.intersection(updates))
+
+        if effective_cleaner_id is not None and should_validate_cleaner:
+            validated_cleaner_id = JobRequestService._validate_preferred_cleaner(
+                effective_cleaner_id,
+                effective_service_type,
+                effective_preferred_date,
+                effective_preferred_time_start,
+                effective_preferred_time_end,
+                exclude_job_request_id=job_request.id,
+            )
+            if "cleaner_id" in updates:
+                updates["cleaner_id"] = validated_cleaner_id
 
         # Apply updates
         for k, v in updates.items():
@@ -642,31 +687,12 @@ class JobRequestService:
           - Otherwise job.preferred_time_start must be >= slot.start_time, and
             if both slot and job have an end time, job end <= slot end.
         """
-        for slot in slots:
-            if not (slot.start_date <= job.preferred_date <= slot.end_date):
-                continue
-
-            # Date matches. Check time only if the slot has any time constraint.
-            if slot.start_time is None and slot.end_time is None:
-                return True  # slot covers the whole day
-
-            # Job has no time preference at all - fits any open slot
-            if job.preferred_time_start is None and job.preferred_time_end is None:
-                return True
-
-            # Check start time constraint (only if both slot and job have a start time)
-            if slot.start_time is not None and job.preferred_time_start is not None:
-                if job.preferred_time_start < slot.start_time:
-                    continue  # job starts before cleaner is available
-
-            # Check end time constraint (only if both slot and job have an end time)
-            if slot.end_time is not None and job.preferred_time_end is not None:
-                if job.preferred_time_end > slot.end_time:
-                    continue  # job ends after cleaner is done
-
-            return True
-
-        return False
+        return schedule_fits_availability(
+            job.preferred_date,
+            job.preferred_time_start,
+            job.preferred_time_end,
+            slots,
+        )
 
     # Helper for cleaner validation
     @staticmethod
@@ -683,5 +709,56 @@ class JobRequestService:
 
         if cleaner.is_banned:
             raise ValueError("invalid_request|This cleaner is currently unavailable.")
+
+        return cleaner_id
+
+    @staticmethod
+    def _validate_preferred_cleaner(
+        cleaner_id: int | None,
+        service_type,
+        preferred_date,
+        preferred_time_start=None,
+        preferred_time_end=None,
+        *,
+        exclude_job_request_id: int | None = None,
+    ) -> int | None:
+        cleaner_id = JobRequestService._validate_cleaner_id(cleaner_id)
+        if cleaner_id is None:
+            return None
+
+        try:
+            service_type = service_type if isinstance(service_type, ServiceType) else ServiceType(service_type)
+        except Exception:
+            valid = ", ".join([s.value for s in ServiceType])
+            raise ValueError(f"invalid_service_type|service_type must be one of: {valid}.")
+
+        profile = (
+            CleanerProfile.query
+            .options(joinedload(CleanerProfile.availability))
+            .filter_by(user_id=cleaner_id)
+            .first()
+        )
+        if not profile:
+            raise ValueError("invalid_request|Selected cleaner does not have a cleaner profile.")
+
+        if profile.service_type != service_type:
+            raise ValueError("invalid_request|Selected cleaner does not offer the requested service type.")
+
+        if not schedule_fits_availability(
+            preferred_date,
+            preferred_time_start,
+            preferred_time_end,
+            profile.availability,
+        ):
+            raise ValueError("invalid_request|Selected cleaner is not available for the preferred date and time.")
+
+        if has_booking_conflict(
+            cleaner_id,
+            preferred_date,
+            preferred_time_start,
+            preferred_time_end,
+            exclude_job_request_id=exclude_job_request_id,
+        ):
+            raise ValueError("invalid_request|Selected cleaner already has a booking for the preferred date and time.")
 
         return cleaner_id
