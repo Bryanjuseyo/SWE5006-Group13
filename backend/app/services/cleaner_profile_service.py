@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime, time as time_type
 
 from app.models import db, CleanerProfile, CleanerAvailability, ServiceType, User, UserProfile, UserRole
+from app.services.cleaner_eligibility import has_booking_conflict, schedule_fits_availability
 
 
 class CleanerProfileService:
@@ -62,19 +63,78 @@ class CleanerProfileService:
         return {"message": "Cleaner profile updated.", "profile": profile.to_dict()}
 
     @staticmethod
-    def list_cleaners() -> Dict[str, List[Dict[str, Any]]]:
+    def list_cleaners(
+        service_type=None,
+        preferred_date=None,
+        preferred_time_start=None,
+        preferred_time_end=None,
+        exclude_job_request_id=None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """Return a list of cleaners with basic information for end-users to browse."""
-        rows = (
+        service_type_enum = None
+        if service_type:
+            try:
+                service_type_enum = ServiceType(service_type)
+            except Exception:
+                valid = ", ".join([s.value for s in ServiceType])
+                raise ValueError(f"invalid_service_type|service_type must be one of: {valid}.")
+
+        parsed_date = None
+        if preferred_date:
+            try:
+                parsed_date = datetime.strptime(preferred_date, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                raise ValueError("invalid_date|preferred_date must be in YYYY-MM-DD format.")
+
+        parsed_start = CleanerProfileService._parse_optional_time(
+            preferred_time_start,
+            "preferred_time_start",
+        )
+        parsed_end = CleanerProfileService._parse_optional_time(
+            preferred_time_end,
+            "preferred_time_end",
+        )
+        if parsed_start and parsed_end and parsed_end <= parsed_start:
+            raise ValueError("invalid_time|preferred_time_end must be strictly after preferred_time_start.")
+
+        excluded_id = None
+        if exclude_job_request_id not in (None, ""):
+            try:
+                excluded_id = int(exclude_job_request_id)
+            except (ValueError, TypeError):
+                raise ValueError("invalid_request|exclude_job_request_id must be an integer.")
+
+        query = (
             db.session.query(User, UserProfile, CleanerProfile)
             .join(UserProfile, UserProfile.user_id == User.id)
             .join(CleanerProfile, CleanerProfile.user_id == User.id)
             .filter(User.role == UserRole.cleaner, User.is_banned.is_(False))
-            .order_by(UserProfile.first_name.asc(), UserProfile.last_name.asc())
-            .all()
         )
+
+        if service_type_enum is not None:
+            query = query.filter(CleanerProfile.service_type == service_type_enum)
+
+        rows = query.order_by(UserProfile.first_name.asc(), UserProfile.last_name.asc()).all()
 
         cleaners: List[Dict[str, Any]] = []
         for user, profile, cleaner_profile in rows:
+            if parsed_date is not None:
+                if not schedule_fits_availability(
+                    parsed_date,
+                    parsed_start,
+                    parsed_end,
+                    cleaner_profile.availability,
+                ):
+                    continue
+                if has_booking_conflict(
+                    user.id,
+                    parsed_date,
+                    parsed_start,
+                    parsed_end,
+                    exclude_job_request_id=excluded_id,
+                ):
+                    continue
+
             cleaners.append(
                 {
                     "user_id": user.id,
@@ -87,6 +147,17 @@ class CleanerProfileService:
             )
 
         return {"cleaners": cleaners}
+
+    @staticmethod
+    def _parse_optional_time(value, field_name):
+        if value in (None, ""):
+            return None
+        for fmt in ("%H:%M", "%H:%M:%S"):
+            try:
+                return datetime.strptime(value, fmt).time()
+            except (ValueError, TypeError):
+                continue
+        raise ValueError(f"invalid_time|{field_name} must be in HH:MM format.")
 
     @staticmethod
     def get_availability(user_id: int) -> Dict[str, Any]:

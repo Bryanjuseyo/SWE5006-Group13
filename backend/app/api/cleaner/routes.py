@@ -16,6 +16,7 @@ def _handle_error(e):
         "forbidden": 403,
         "invalid_request": 400,
         "invalid_date": 400,
+        "invalid_service_type": 400,
         "invalid_time": 400,
     }
     return jsonify({"error": error, "message": message}), status_codes.get(error, 400)
@@ -85,7 +86,16 @@ def update_profile():
 @roles_required("end_user")
 def list_cleaners():
     """Browse a list of cleaners (end-user)."""
-    return jsonify(CleanerProfileService.list_cleaners()), 200
+    try:
+        return jsonify(CleanerProfileService.list_cleaners(
+            service_type=request.args.get("service_type"),
+            preferred_date=request.args.get("preferred_date"),
+            preferred_time_start=request.args.get("preferred_time_start"),
+            preferred_time_end=request.args.get("preferred_time_end"),
+            exclude_job_request_id=request.args.get("exclude_job_request_id"),
+        )), 200
+    except ValueError as e:
+        return _handle_error(e)
 
 
 @cleaner_bp.get("/availability")

@@ -46,24 +46,49 @@ export default function CreateJobRequestPage() {
     }
   }, [token, user, navigate]);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await listCleaners();
-        if (mounted) setCleaners(res.cleaners);
-      } catch (e: unknown) {
-        console.error(e);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
   const today = new Date().toISOString().split('T')[0];
   const now = new Date();
   const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const canLoadCleaners = Boolean(serviceType && preferredDate);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!canLoadCleaners) {
+      setCleaners([]);
+      setPreferredCleanerId('');
+      return () => {
+        mounted = false;
+      };
+    }
+
+    (async () => {
+      try {
+        const res = await listCleaners({
+          service_type: serviceType as ServiceType,
+          preferred_date: preferredDate,
+          preferred_time_start: preferredTimeStart || undefined,
+          preferred_time_end: preferredTimeEnd || undefined,
+        });
+        if (!mounted) return;
+
+        setCleaners(res.cleaners);
+        setPreferredCleanerId((current) => (
+          current !== '' && !res.cleaners.some((c) => c.user_id === current) ? '' : current
+        ));
+      } catch (e: unknown) {
+        console.error(e);
+        if (mounted) {
+          setCleaners([]);
+          setPreferredCleanerId('');
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [canLoadCleaners, serviceType, preferredDate, preferredTimeStart, preferredTimeEnd]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -275,24 +300,31 @@ export default function CreateJobRequestPage() {
                 <select
                   className="form-select"
                   value={preferredCleanerId}
+                  disabled={!canLoadCleaners}
                   onChange={(e) => {
                     const v = e.target.value;
                     setPreferredCleanerId(v === '' ? '' : Number(v));
                   }}
                 >
-                  <option value="">Select a cleaner...</option>
+                  <option value="">
+                    {!canLoadCleaners
+                      ? 'Select service type and date first'
+                      : cleaners.length === 0
+                        ? 'No eligible cleaners available'
+                        : 'Select a cleaner...'}
+                  </option>
                   {cleaners.map((c) => (
                     <option key={c.user_id} value={c.user_id}>
-                      {c.first_name} {c.last_name} • {c.cleaner_profile.service_type} •{' '}
+                      {c.first_name} {c.last_name} - {c.cleaner_profile.service_type} -{' '}
                       {c.cleaner_profile.hourly_rate != null
                         ? `$${c.cleaner_profile.hourly_rate}/hr`
                         : 'Rate N/A'}{' '}
-                      • {c.cleaner_profile.years_experience} yrs
+                      - {c.cleaner_profile.years_experience} yrs
                     </option>
                   ))}
                 </select>
                 <div className="form-text">
-                  Only showing cleaners available for your selected date and location.
+                  Only showing cleaners that match the service type, availability, and booking schedule.
                 </div>
               </>
             )}
