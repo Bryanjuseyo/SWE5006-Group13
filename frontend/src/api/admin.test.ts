@@ -6,6 +6,7 @@ import {
   unbanUser,
   getAdminBookings,
   rejectBooking,
+  getMatchingCleaners,
   autoAssignCleaner,
 } from './admin';
 
@@ -84,5 +85,25 @@ describe('admin API', () => {
     const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/job-requests/9/auto-assign');
     expect(opts.method).toBe('POST');
+  });
+
+  it('getMatchingCleaners appends selected strategy', async () => {
+    const fetchMock = mockFetch(200, { job_request_id: 9, strategy: 'lowest_price', matches: [] });
+    await getMatchingCleaners(9, 'tok', 'lowest_price');
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/job-requests/9/match');
+    expect(url).toContain('strategy=lowest_price');
+  });
+
+  it('autoAssignCleaner sends selected strategy in the body', async () => {
+    const fetchMock = mockFetch(200, {
+      message: 'assigned',
+      job_request: {},
+      assigned_cleaner: {},
+      strategy: 'highest_experience',
+    });
+    await autoAssignCleaner(9, 'tok', 'highest_experience');
+    const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(opts.body).toContain('highest_experience');
   });
 });

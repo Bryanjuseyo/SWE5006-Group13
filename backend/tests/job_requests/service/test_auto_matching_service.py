@@ -109,169 +109,6 @@ def create_job(
     return job
 
 
-def test_score_cleaner_returns_zero_when_service_type_mismatch(app):
-    with app.app_context():
-        cleaner = create_user("cleaner1@test.com", UserRole.cleaner)
-        profile = create_cleaner_profile(
-            cleaner.id,
-            service_type=ServiceType.full,
-            hourly_rate=Decimal("20.00"),
-            years_experience=5,
-        )
-        end_user = create_user("client1@test.com", UserRole.end_user)
-        job = create_job(
-            end_user.id,
-            service_type=ServiceType.partial,
-            preferred_date=date(2026, 3, 28),
-        )
-
-        score = MatchingService._score_cleaner(job, cleaner, profile)
-
-        assert score == 0.0
-
-
-def test_score_cleaner_gives_full_availability_score_for_time_overlap(app):
-    with app.app_context():
-        cleaner = create_user("cleaner2@test.com", UserRole.cleaner)
-        profile = create_cleaner_profile(
-            cleaner.id,
-            service_type=ServiceType.partial,
-            hourly_rate=Decimal("20.00"),
-            years_experience=5,
-        )
-        create_availability(
-            profile.id,
-            start_date=date(2026, 3, 28),
-            end_date=date(2026, 3, 28),
-            start_time=time(9, 0),
-            end_time=time(17, 0),
-        )
-
-        end_user = create_user("client2@test.com", UserRole.end_user)
-        job = create_job(
-            end_user.id,
-            service_type=ServiceType.partial,
-            preferred_date=date(2026, 3, 28),
-            preferred_time_start=time(10, 0),
-            preferred_time_end=time(12, 0),
-        )
-
-        score = MatchingService._score_cleaner(job, cleaner, profile)
-
-        # 40 service match + 30 availability + 10 exp(5*2 capped) + 10 low rate
-        assert score == 90.0
-
-
-def test_score_cleaner_gives_availability_score_for_all_day_slot(app):
-    with app.app_context():
-        cleaner = create_user("cleaner3@test.com", UserRole.cleaner)
-        profile = create_cleaner_profile(
-            cleaner.id,
-            service_type=ServiceType.partial,
-            hourly_rate=Decimal("35.00"),
-            years_experience=3,
-        )
-        create_availability(
-            profile.id,
-            start_date=date(2026, 3, 28),
-            end_date=date(2026, 3, 28),
-            start_time=None,
-            end_time=None,
-        )
-
-        end_user = create_user("client3@test.com", UserRole.end_user)
-        job = create_job(
-            end_user.id,
-            service_type=ServiceType.partial,
-            preferred_date=date(2026, 3, 28),
-            preferred_time_start=time(14, 0),
-            preferred_time_end=time(16, 0),
-        )
-
-        score = MatchingService._score_cleaner(job, cleaner, profile)
-
-        # 40 + 30 + 6 + 7
-        assert score == 83.0
-
-
-def test_score_cleaner_gives_availability_score_when_job_has_no_start_time(app):
-    with app.app_context():
-        cleaner = create_user("cleaner4@test.com", UserRole.cleaner)
-        profile = create_cleaner_profile(
-            cleaner.id,
-            service_type=ServiceType.partial,
-            hourly_rate=Decimal("50.00"),
-            years_experience=2,
-        )
-        create_availability(
-            profile.id,
-            start_date=date(2026, 3, 28),
-            end_date=date(2026, 3, 29),
-            start_time=time(9, 0),
-            end_time=time(17, 0),
-        )
-
-        end_user = create_user("client4@test.com", UserRole.end_user)
-        job = create_job(
-            end_user.id,
-            service_type=ServiceType.partial,
-            preferred_date=date(2026, 3, 28),
-            preferred_time_start=None,
-            preferred_time_end=None,
-        )
-
-        score = MatchingService._score_cleaner(job, cleaner, profile)
-
-        # 40 + 30 + 4 + 4
-        assert score == 78.0
-
-
-def test_score_cleaner_gives_partial_credit_when_no_availability_set(app):
-    with app.app_context():
-        cleaner = create_user("cleaner5@test.com", UserRole.cleaner)
-        profile = create_cleaner_profile(
-            cleaner.id,
-            service_type=ServiceType.partial,
-            hourly_rate=Decimal("60.00"),
-            years_experience=1,
-        )
-
-        end_user = create_user("client5@test.com", UserRole.end_user)
-        job = create_job(
-            end_user.id,
-            service_type=ServiceType.partial,
-            preferred_date=date(2026, 3, 28),
-        )
-
-        score = MatchingService._score_cleaner(job, cleaner, profile)
-
-        # 40 + 15 + 2 + 1
-        assert score == 58.0
-
-
-def test_score_cleaner_caps_experience_bonus_at_20(app):
-    with app.app_context():
-        cleaner = create_user("cleaner6@test.com", UserRole.cleaner)
-        profile = create_cleaner_profile(
-            cleaner.id,
-            service_type=ServiceType.partial,
-            hourly_rate=Decimal("20.00"),
-            years_experience=50,
-        )
-
-        end_user = create_user("client6@test.com", UserRole.end_user)
-        job = create_job(
-            end_user.id,
-            service_type=ServiceType.partial,
-            preferred_date=date(2026, 3, 28),
-        )
-
-        score = MatchingService._score_cleaner(job, cleaner, profile)
-
-        # 40 + 15 + 20 cap + 10
-        assert score == 85.0
-
-
 def test_find_matching_cleaners_success_sorted_descending(app):
     with app.app_context():
         end_user = create_user("owner@test.com", UserRole.end_user)
@@ -321,8 +158,76 @@ def test_find_matching_cleaners_success_sorted_descending(app):
         assert result["job_request_id"] == job.id
         assert len(result["matches"]) == 2
         assert result["matches"][0]["cleaner_id"] == cleaner1.id
+        assert result["matches"][1]["cleaner_id"] == cleaner2.id
         assert result["matches"][0]["name"] == "Alice Tan"
-        assert result["matches"][0]["score"] > result["matches"][1]["score"]
+
+
+def test_find_matching_cleaners_default_uses_continuous_pricing_score(app):
+    with app.app_context():
+        end_user = create_user("owner_continuous@test.com", UserRole.end_user)
+        job = create_job(
+            end_user.id,
+            service_type=ServiceType.partial,
+            status=JobStatus.pending,
+            preferred_date=date(2026, 3, 28),
+        )
+
+        gradual_cleaner = create_user("gradual_price@test.com", UserRole.cleaner)
+        create_user_profile(gradual_cleaner.id, "Gradual", "Price")
+        create_cleaner_profile(
+            gradual_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("36.00"),
+            years_experience=5,
+        )
+
+        band_edge_cleaner = create_user("band_edge@test.com", UserRole.cleaner)
+        create_user_profile(band_edge_cleaner.id, "Band", "Edge")
+        create_cleaner_profile(
+            band_edge_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("35.00"),
+            years_experience=4,
+        )
+
+        result = MatchingService.find_matching_cleaners(job.id, end_user.id, "end_user")
+
+        assert result["matches"][0]["cleaner_id"] == gradual_cleaner.id
+        assert result["matches"][1]["cleaner_id"] == band_edge_cleaner.id
+
+
+def test_find_matching_cleaners_default_treats_zero_rate_as_free(app):
+    with app.app_context():
+        end_user = create_user("owner_free@test.com", UserRole.end_user)
+        job = create_job(
+            end_user.id,
+            service_type=ServiceType.partial,
+            status=JobStatus.pending,
+            preferred_date=date(2026, 3, 28),
+        )
+
+        free_cleaner = create_user("free_rate@test.com", UserRole.cleaner)
+        create_user_profile(free_cleaner.id, "Free", "Rate")
+        create_cleaner_profile(
+            free_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("0.00"),
+            years_experience=1,
+        )
+
+        paid_cleaner = create_user("paid_rate@test.com", UserRole.cleaner)
+        create_user_profile(paid_cleaner.id, "Paid", "Rate")
+        create_cleaner_profile(
+            paid_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("30.00"),
+            years_experience=1,
+        )
+
+        result = MatchingService.find_matching_cleaners(job.id, end_user.id, "end_user")
+
+        assert result["matches"][0]["cleaner_id"] == free_cleaner.id
+        assert result["matches"][1]["cleaner_id"] == paid_cleaner.id
 
 
 def test_find_matching_cleaners_returns_top_5_only(app):
@@ -385,7 +290,7 @@ def test_find_matching_cleaners_excludes_banned_cleaners(app):
         assert banned_cleaner.id not in cleaner_ids
 
 
-def test_find_matching_cleaners_excludes_zero_score_cleaners(app):
+def test_find_matching_cleaners_excludes_cleaners_with_different_service_type(app):
     with app.app_context():
         end_user = create_user("owner4@test.com", UserRole.end_user)
         job = create_job(
@@ -407,6 +312,50 @@ def test_find_matching_cleaners_excludes_zero_score_cleaners(app):
         result = MatchingService.find_matching_cleaners(job.id, end_user.id, "end_user")
 
         assert result["matches"] == []
+
+
+def test_find_matching_cleaners_excludes_cleaners_with_non_matching_availability(app):
+    with app.app_context():
+        end_user = create_user("owner_unavailable@test.com", UserRole.end_user)
+        job = create_job(
+            end_user.id,
+            service_type=ServiceType.partial,
+            status=JobStatus.pending,
+            preferred_date=date(2026, 3, 28),
+            preferred_time_start=time(10, 0),
+            preferred_time_end=time(12, 0),
+        )
+
+        unavailable_cleaner = create_user("unavailable@test.com", UserRole.cleaner)
+        create_user_profile(unavailable_cleaner.id, "Unavailable", "Cleaner")
+        unavailable_profile = create_cleaner_profile(
+            unavailable_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("20.00"),
+            years_experience=10,
+        )
+        create_availability(
+            unavailable_profile.id,
+            start_date=date(2026, 3, 27),
+            end_date=date(2026, 3, 27),
+            start_time=time(9, 0),
+            end_time=time(17, 0),
+        )
+
+        flexible_cleaner = create_user("flexible@test.com", UserRole.cleaner)
+        create_user_profile(flexible_cleaner.id, "Flexible", "Cleaner")
+        create_cleaner_profile(
+            flexible_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("60.00"),
+            years_experience=1,
+        )
+
+        result = MatchingService.find_matching_cleaners(job.id, end_user.id, "end_user")
+
+        cleaner_ids = [m["cleaner_id"] for m in result["matches"]]
+        assert flexible_cleaner.id in cleaner_ids
+        assert unavailable_cleaner.id not in cleaner_ids
 
 
 def test_find_matching_cleaners_falls_back_to_email_when_no_user_profile(app):
@@ -616,6 +565,45 @@ def test_find_matching_cleaners_supports_lowest_price_strategy(app):
 
         assert result["strategy"] == "lowest_price"
         assert result["matches"][0]["cleaner_id"] == cheaper_cleaner.id
+
+
+def test_find_matching_cleaners_supports_highest_experience_strategy(app):
+    with app.app_context():
+        end_user = create_user("owner13@test.com", UserRole.end_user)
+        job = create_job(
+            end_user.id,
+            service_type=ServiceType.partial,
+            status=JobStatus.pending,
+            preferred_date=date(2026, 3, 28),
+        )
+
+        cheaper_cleaner = create_user("cheap_less_exp@test.com", UserRole.cleaner)
+        create_user_profile(cheaper_cleaner.id, "Cheap", "LessExp")
+        create_cleaner_profile(
+            cheaper_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("20.00"),
+            years_experience=1,
+        )
+
+        experienced_cleaner = create_user("experienced_high_rate@test.com", UserRole.cleaner)
+        create_user_profile(experienced_cleaner.id, "Experienced", "HighRate")
+        create_cleaner_profile(
+            experienced_cleaner.id,
+            service_type=ServiceType.partial,
+            hourly_rate=Decimal("60.00"),
+            years_experience=10,
+        )
+
+        result = MatchingService.find_matching_cleaners(
+            job.id,
+            end_user.id,
+            "end_user",
+            strategy_name="highest_experience",
+        )
+
+        assert result["strategy"] == "highest_experience"
+        assert result["matches"][0]["cleaner_id"] == experienced_cleaner.id
 
 
 def test_find_matching_cleaners_raises_invalid_strategy(app):
