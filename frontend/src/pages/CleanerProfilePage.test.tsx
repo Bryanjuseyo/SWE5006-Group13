@@ -140,6 +140,21 @@ describe('CleanerProfilePage', () => {
     });
   });
 
+  it('shows error when years of experience is more than 100', async () => {
+    vi.mocked(cleanerProfileApi.getCleanerProfile).mockResolvedValue({ profile: MOCK_PROFILE });
+    render(<MemoryRouter><CleanerProfilePage /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /save cleaner profile/i }));
+
+    const yearsInput = screen.getByPlaceholderText('e.g. 2');
+    await userEvent.clear(yearsInput);
+    await userEvent.type(yearsInput, '101');
+    fireEvent.submit(document.querySelector('form')!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Years of experience cannot be more than 100.')).toBeInTheDocument();
+    });
+  });
+
   it('shows error for negative hourly rate', async () => {
     vi.mocked(cleanerProfileApi.getCleanerProfile).mockResolvedValue({ profile: MOCK_PROFILE });
     render(<MemoryRouter><CleanerProfilePage /></MemoryRouter>);

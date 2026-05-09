@@ -62,8 +62,9 @@ export type CleanerMatch = {
   service_type: string;
   hourly_rate: number | null;
   years_experience: number;
-  score: number;
 };
+
+export type MatchingStrategy = 'default' | 'lowest_price' | 'highest_experience';
 
 // =============================================
 // DASHBOARD
@@ -158,20 +159,26 @@ export async function rejectBooking(
 
 export async function getMatchingCleaners(
   jobRequestId: number,
-  token: string
-): Promise<{ job_request_id: number; matches: CleanerMatch[] }> {
-  return apiRequest<{ job_request_id: number; matches: CleanerMatch[] }>(
-    `/api/job-requests/${jobRequestId}/match`,
+  token: string,
+  strategy?: MatchingStrategy
+): Promise<{ job_request_id: number; strategy: MatchingStrategy; matches: CleanerMatch[] }> {
+  const query = new URLSearchParams();
+  if (strategy) query.set('strategy', strategy);
+  const qs = query.toString();
+
+  return apiRequest<{ job_request_id: number; strategy: MatchingStrategy; matches: CleanerMatch[] }>(
+    `/api/job-requests/${jobRequestId}/match${qs ? `?${qs}` : ''}`,
     { token }
   );
 }
 
 export async function autoAssignCleaner(
   jobRequestId: number,
-  token: string
-): Promise<{ message: string; job_request: JobRequest; assigned_cleaner: CleanerMatch }> {
-  return apiRequest<{ message: string; job_request: JobRequest; assigned_cleaner: CleanerMatch }>(
+  token: string,
+  strategy?: MatchingStrategy
+): Promise<{ message: string; job_request: JobRequest; assigned_cleaner: CleanerMatch; strategy: MatchingStrategy }> {
+  return apiRequest<{ message: string; job_request: JobRequest; assigned_cleaner: CleanerMatch; strategy: MatchingStrategy }>(
     `/api/job-requests/${jobRequestId}/auto-assign`,
-    { method: 'POST', body: {}, token }
+    { method: 'POST', body: strategy ? { strategy } : {}, token }
   );
 }

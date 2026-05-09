@@ -23,6 +23,7 @@ def _handle_error(e):
         "invalid_service_type": 400,
         "invalid_date": 400,
         "invalid_time": 400,
+        "invalid_strategy": 400,
     }
     status = status_codes.get(error, 400)
     return jsonify({"error": error, "message": message}), status
@@ -176,9 +177,15 @@ def match_cleaners(job_request_id):
     """Find matching cleaners for a job request."""
     user_id = g.user["user_id"]
     role = g.user["role"]
+    strategy_name = request.args.get("strategy") or None
 
     try:
-        result = MatchingService.find_matching_cleaners(job_request_id, user_id, role)
+        result = MatchingService.find_matching_cleaners(
+            job_request_id,
+            user_id,
+            role,
+            strategy_name=strategy_name,
+        )
         return jsonify(result), 200
     except ValueError as e:
         return _handle_error(e)
@@ -191,9 +198,16 @@ def auto_assign_cleaner(job_request_id):
     """Auto-assign the best matching cleaner to a job request."""
     user_id = g.user["user_id"]
     role = g.user["role"]
+    data = request.get_json(silent=True) or {}
+    strategy_name = data.get("strategy") or request.args.get("strategy") or None
 
     try:
-        result = MatchingService.auto_assign_cleaner(job_request_id, user_id, role)
+        result = MatchingService.auto_assign_cleaner(
+            job_request_id,
+            user_id,
+            role,
+            strategy_name=strategy_name,
+        )
         return jsonify(result), 200
     except ValueError as e:
         return _handle_error(e)

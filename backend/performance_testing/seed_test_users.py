@@ -39,7 +39,7 @@ CLEANERS = [
         "hourly_rate": round(15 + (i * 2), 2),   # $17 – $35/hr
         "years_experience": (i % 10) + 1,          # 1 – 10 years
     }
-    for i in range(1, 1001)
+    for i in range(1, 501)
 ]
 
 

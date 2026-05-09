@@ -62,6 +62,24 @@ def test_invalid_years_experience_raises_value_error(mocker):
     assert "invalid_years_experience" in str(e.value)
 
 
+def test_years_experience_over_100_raises_value_error(mocker):
+    # create path (no existing profile)
+    mocker.patch(
+        "app.services.cleaner_profile_service.CleanerProfile.query.filter_by",
+        return_value=mocker.Mock(first=lambda: None)
+    )
+    mocker.patch("app.services.cleaner_profile_service.db.session")
+
+    with pytest.raises(ValueError) as e:
+        CleanerProfileService.upsert_cleaner_profile(
+            user_id=1,
+            data={"service_type": any_service_type_value(), "years_experience": 101}
+        )
+
+    assert "invalid_years_experience" in str(e.value)
+    assert "years_experience must be <= 100" in str(e.value)
+
+
 def test_missing_service_type_on_create_raises_value_error(mocker):
     mock_query = mocker.Mock()
     mock_query.filter_by.return_value.first.return_value = None
