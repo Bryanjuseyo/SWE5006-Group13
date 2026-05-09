@@ -99,6 +99,15 @@ def test_register_cleaner_invalid_service_type(mocker):
                                   service_type="premium")
 
 
+def test_register_cleaner_years_experience_over_100(mocker):
+    mocker.patch("app.services.auth_service.User.query")
+    with pytest.raises(ValueError, match="invalid_years_experience"):
+        AuthService.register_user("jane@test.com", "Passw0rd1", "cleaner",
+                                  first_name="Jane", last_name="Doe",
+                                  service_type="full",
+                                  years_experience=101)
+
+
 def test_register_duplicate_email(mocker):
     mock_query = mocker.patch("app.services.auth_service.User.query")
     mock_query.filter_by.return_value.first.return_value = object()
