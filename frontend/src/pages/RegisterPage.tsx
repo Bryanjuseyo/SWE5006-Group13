@@ -101,6 +101,10 @@ export default function RegisterPage() {
       setError('Years of experience must be a non-negative number.');
       return;
     }
+    if (yearsInt > 100) {
+      setError('Years of experience cannot be more than 100.');
+      return;
+    }
 
     let rateNum: number | null = null;
     if (hourlyRate.trim()) {

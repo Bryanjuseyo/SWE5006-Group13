@@ -176,6 +176,17 @@ describe('RegisterPage – step 3 (cleaner)', () => {
     });
   });
 
+  it('shows error when years of experience is more than 100', async () => {
+    await advanceToStep3();
+    const yearsInput = screen.getByPlaceholderText('e.g. 2');
+    await userEvent.clear(yearsInput);
+    await userEvent.type(yearsInput, '101');
+    fireEvent.submit(document.querySelector('form')!);
+    await waitFor(() => {
+      expect(screen.getByText('Years of experience cannot be more than 100.')).toBeInTheDocument();
+    });
+  });
+
   it('shows error for negative hourly rate', async () => {
     await advanceToStep3();
     const rateInput = screen.getByPlaceholderText(/e\.g\. 25\.50/i);

@@ -21,6 +21,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PHONE_RE = re.compile(r"^[89]\d{7}$")
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_MINUTES = 15
+MAX_YEARS_EXPERIENCE = 100
 
 
 class AuthService:
@@ -75,6 +76,15 @@ class AuthService:
             except Exception:
                 valid = ", ".join([s.value for s in ServiceType])
                 raise ValueError(f"invalid_service_type|service_type must be one of: {valid}.")
+            if years_experience is not None:
+                try:
+                    years_experience = int(years_experience)
+                except (ValueError, TypeError):
+                    raise ValueError("invalid_years_experience|years_experience must be an integer.")
+                if years_experience < 0:
+                    raise ValueError("invalid_years_experience|years_experience must be >= 0.")
+                if years_experience > MAX_YEARS_EXPERIENCE:
+                    raise ValueError("invalid_years_experience|years_experience must be <= 100.")
 
         # duplicate check (fast path)
         if User.query.filter_by(email=email).first():
@@ -104,7 +114,7 @@ class AuthService:
                     user_id=user.id,
                     service_type=service_type_enum,
                     hourly_rate=hourly_rate if hourly_rate is not None else None,
-                    years_experience=int(years_experience) if years_experience is not None else 0,
+                    years_experience=years_experience if years_experience is not None else 0,
                 )
                 db.session.add(cleaner_profile)
 

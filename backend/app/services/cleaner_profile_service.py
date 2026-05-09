@@ -7,6 +7,8 @@ from app.services.cleaner_eligibility import has_booking_conflict, schedule_fits
 
 
 class CleanerProfileService:
+    MAX_YEARS_EXPERIENCE = 100
+
     @staticmethod
     def get_cleaner_profile(user_id: int) -> Dict[str, Any]:
         profile = CleanerProfile.query.filter_by(user_id=user_id).first()
@@ -46,6 +48,8 @@ class CleanerProfileService:
                 raise ValueError("invalid_years_experience|years_experience must be an integer.")
             if years < 0:
                 raise ValueError("invalid_years_experience|years_experience must be >= 0.")
+            if years > CleanerProfileService.MAX_YEARS_EXPERIENCE:
+                raise ValueError("invalid_years_experience|years_experience must be <= 100.")
             updates["years_experience"] = years
 
         profile = CleanerProfile.query.filter_by(user_id=user_id).first()
