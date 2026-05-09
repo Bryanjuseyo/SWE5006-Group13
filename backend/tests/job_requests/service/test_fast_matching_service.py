@@ -169,6 +169,54 @@ def test_matching_route_responds_within_budget(client, patch_decode_token, beare
     )
 
 
+def test_matching_route_passes_strategy(client, patch_decode_token, bearer_header, mocker):
+    patch_decode_token(payload={"user_id": 1, "email": "u@test.com", "role": "end_user"})
+    mock_svc = mocker.patch(
+        "app.services.matching_service.MatchingService.find_matching_cleaners",
+        return_value={"job_request_id": 1, "strategy": "lowest_price", "matches": []}
+    )
+
+    resp = client.get(
+        "/api/job-requests/1/match?strategy=lowest_price",
+        headers=bearer_header("ok"),
+    )
+
+    assert resp.status_code == 200
+    mock_svc.assert_called_once_with(
+        1,
+        1,
+        "end_user",
+        strategy_name="lowest_price",
+    )
+
+
+def test_auto_assign_route_passes_strategy(client, patch_decode_token, bearer_header, mocker):
+    patch_decode_token(payload={"user_id": 1, "email": "u@test.com", "role": "end_user"})
+    mock_svc = mocker.patch(
+        "app.services.matching_service.MatchingService.auto_assign_cleaner",
+        return_value={
+            "message": "Assigned.",
+            "job_request": {},
+            "assigned_cleaner": {},
+            "strategy": "highest_experience",
+        }
+    )
+
+    resp = client.post(
+        "/api/job-requests/1/auto-assign",
+        headers=bearer_header("ok"),
+        json={"strategy": "highest_experience"},
+    )
+
+    assert resp.status_code == 200
+    mock_svc.assert_called_once_with(
+        1,
+        1,
+        "end_user",
+        strategy_name="highest_experience",
+    )
+
+
 def test_matching_result_returned_not_empty_when_eligible_cleaner_exists(app):
     """US-24: matching response is non-empty within the time budget when a match exists."""
     from app.services.matching_service import MatchingService

@@ -155,7 +155,8 @@ describe('CreateJobRequestPage', () => {
     vi.mocked(jobRequestsApi.createJobRequest).mockResolvedValue({ message: 'Created.', job_request: mockJob });
     vi.mocked(adminApi.autoAssignCleaner).mockResolvedValue({
       message: 'Assigned.', job_request: mockJob,
-      assigned_cleaner: { cleaner_id: 5, email: 'c@test.com', name: 'Bob', service_type: 'partial', hourly_rate: 25, years_experience: 3, score: 0.9 },
+      assigned_cleaner: { cleaner_id: 5, email: 'c@test.com', name: 'Bob', service_type: 'partial', hourly_rate: 25, years_experience: 3 },
+      strategy: 'default',
     });
 
     render(<MemoryRouter><CreateJobRequestPage /></MemoryRouter>);

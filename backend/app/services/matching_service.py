@@ -27,12 +27,8 @@ class CleanerMatchingStrategy(ABC):
     name = "base"
 
     @abstractmethod
-    def build_score_expression(self, job: JobRequest):
-        """Return a SQLAlchemy expression used to rank matching cleaners."""
-
-    @abstractmethod
-    def score_cleaner(self, job: JobRequest, user: User, profile: CleanerProfile) -> float:
-        """Return the in-memory score for a cleaner profile."""
+    def build_order_by(self, job: JobRequest):
+        """Return SQLAlchemy order expressions for this strategy."""
 
     @staticmethod
     def _matching_availability_exists(job: JobRequest):
@@ -73,231 +69,88 @@ class CleanerMatchingStrategy(ABC):
     def _has_any_availability():
         return exists().where(CleanerAvailability.cleaner_profile_id == CleanerProfile.id)
 
-    @classmethod
-    def _availability_level_expression(cls, job: JobRequest):
-        """
-        Shared raw component for SQL scoring.
-        2 = fully available, 1 = no availability configured, 0 = unavailable.
-        """
-        return case(
-            (cls._matching_availability_exists(job), 2),
-            (~cls._has_any_availability(), 1),
-            else_=0,
-        )
-
     @staticmethod
     def _experience_years_expression():
         return func.coalesce(CleanerProfile.years_experience, 0)
 
     @staticmethod
-    def _rate_band_expression():
-        """
-        Shared raw component for SQL scoring.
-        4 = lowest price band, 1 = highest non-null price band, 0 = missing rate.
-        """
-        return case(
-            (CleanerProfile.hourly_rate <= 20, 4),
-            (CleanerProfile.hourly_rate <= 35, 3),
-            (CleanerProfile.hourly_rate <= 50, 2),
-            (CleanerProfile.hourly_rate.isnot(None), 1),
-            else_=0,
-        )
+    def _hourly_rate_nulls_last_expression():
+        return case((CleanerProfile.hourly_rate.is_(None), 1), else_=0)
 
-    @staticmethod
-    def _rate_band(profile: CleanerProfile) -> int:
-        if not profile.hourly_rate:
-            return 0
-
-        rate = float(profile.hourly_rate)
-        if rate <= 20:
-            return 4
-        if rate <= 35:
-            return 3
-        if rate <= 50:
-            return 2
-        return 1
-
-    @staticmethod
-    def _experience_years(profile: CleanerProfile) -> int:
-        return profile.years_experience or 0
-
-    @staticmethod
-    def _availability_level(job: JobRequest, profile: CleanerProfile) -> int:
-        availability_slots = profile.availability
-        if not availability_slots:
-            return 1
-
-        for slot in availability_slots:
-            if not (slot.start_date <= job.preferred_date <= slot.end_date):
-                continue
-
-            if slot.start_time is None and slot.end_time is None:
-                return 2
-
-            if job.preferred_time_start is None:
-                return 2
-
-            time_ok = True
-            if slot.start_time and job.preferred_time_start:
-                if job.preferred_time_start < slot.start_time:
-                    time_ok = False
-            if slot.end_time and job.preferred_time_end:
-                if job.preferred_time_end > slot.end_time:
-                    time_ok = False
-
-            if time_ok:
-                return 2
-
-        return 0
-
-    @staticmethod
-    def _service_type_matches(job: JobRequest, profile: CleanerProfile) -> bool:
-        return profile.service_type == job.service_type
+    @classmethod
+    def _availability_is_eligible_expression(cls, job: JobRequest):
+        return or_(cls._matching_availability_exists(job), ~cls._has_any_availability())
 
 
 class DefaultMatchingStrategy(CleanerMatchingStrategy):
     """
-    Concrete strategy.
-    This is the default implementation and preserves the original matching
-    behaviour used by the application.
+    Concrete strategy. Uses a balanced formula: 50% cleaner experience and
+    50% pricing.
     """
 
     name = "default"
 
-    def build_score_expression(self, job: JobRequest):
-        availability_level = self._availability_level_expression(job)
-        experience_years = self._experience_years_expression()
-        rate_band = self._rate_band_expression()
+    @staticmethod
+    def _experience_score_expression():
+        return func.least(DefaultMatchingStrategy._experience_years_expression() * 10, 100)
 
-        availability_score = case(
-            (availability_level == 2, 30),
-            (availability_level == 1, 15),
-            else_=0,
-        )
-        experience_score = func.least(experience_years * 2, 20)
-        rate_score = case(
-            (rate_band == 4, 10),
-            (rate_band == 3, 7),
-            (rate_band == 2, 4),
-            (rate_band == 1, 1),
+    @staticmethod
+    def _pricing_score_expression():
+        return case(
+            (and_(CleanerProfile.hourly_rate >= 0, CleanerProfile.hourly_rate <= 20), 100),
+            (
+                and_(CleanerProfile.hourly_rate > 20, CleanerProfile.hourly_rate < 80),
+                literal(100) - ((CleanerProfile.hourly_rate - literal(20)) * literal(100 / 60)),
+            ),
             else_=0,
         )
 
-        return (
-            literal(40)
-            + availability_score
-            + experience_score
-            + rate_score
-        ).label("score")
+    def _ranking_expression(self):
+        experience_score = self._experience_score_expression()
+        pricing_score = self._pricing_score_expression()
+        return (experience_score * literal(0.5) + pricing_score * literal(0.5)).label("ranking_score")
 
-    def score_cleaner(self, job: JobRequest, user: User, profile: CleanerProfile) -> float:
-        if not self._service_type_matches(job, profile):
-            return 0.0
-
-        availability_level = self._availability_level(job, profile)
-        availability_score = 30.0 if availability_level == 2 else 15.0 if availability_level == 1 else 0.0
-
-        experience_years = self._experience_years(profile)
-        experience_score = float(min(experience_years * 2, 20))
-
-        rate_band = self._rate_band(profile)
-        rate_score = {4: 10.0, 3: 7.0, 2: 4.0, 1: 1.0}.get(rate_band, 0.0)
-
-        return 40.0 + availability_score + experience_score + rate_score
+    def build_order_by(self, job: JobRequest):
+        return [
+            self._ranking_expression().desc(),
+            self._hourly_rate_nulls_last_expression().asc(),
+            CleanerProfile.hourly_rate.asc(),
+            User.id.asc(),
+        ]
 
 
 class LowestPriceMatchingStrategy(CleanerMatchingStrategy):
     """
-    Concrete strategy.
-    This implementation prioritizes cheaper cleaners over more experienced ones.
+    Concrete strategy. Chooses the cheapest available cleaner first, using
+    experience only as a tie-breaker.
     """
 
     name = "lowest_price"
 
-    def build_score_expression(self, job: JobRequest):
-        availability_level = self._availability_level_expression(job)
-        experience_years = self._experience_years_expression()
-        rate_band = self._rate_band_expression()
-
-        availability_score = case(
-            (availability_level == 2, 30),
-            (availability_level == 1, 15),
-            else_=0,
-        )
-        experience_score = func.least(experience_years, 10)
-        rate_priority = case(
-            (rate_band == 4, 25),
-            (rate_band == 3, 18),
-            (rate_band == 2, 10),
-            (rate_band == 1, 3),
-            else_=0,
-        )
-
-        return (
-            literal(30)
-            + availability_score
-            + experience_score
-            + rate_priority
-        ).label("score")
-
-    def score_cleaner(self, job: JobRequest, user: User, profile: CleanerProfile) -> float:
-        if not self._service_type_matches(job, profile):
-            return 0.0
-
-        availability_level = self._availability_level(job, profile)
-        availability_score = 30.0 if availability_level == 2 else 15.0 if availability_level == 1 else 0.0
-
-        experience_score = float(min(self._experience_years(profile), 10))
-        rate_score = {4: 25.0, 3: 18.0, 2: 10.0, 1: 3.0}.get(self._rate_band(profile), 0.0)
-
-        return 30.0 + availability_score + experience_score + rate_score
+    def build_order_by(self, job: JobRequest):
+        return [
+            self._hourly_rate_nulls_last_expression().asc(),
+            CleanerProfile.hourly_rate.asc(),
+            self._experience_years_expression().desc(),
+            User.id.asc(),
+        ]
 
 
 class HighestExperienceMatchingStrategy(CleanerMatchingStrategy):
     """
-    Concrete strategy.
-    This implementation prioritizes more experienced cleaners over cheaper ones.
+    Concrete strategy. Chooses the most experienced available cleaner first,
+    using hourly rate only as a tie-breaker.
     """
 
     name = "highest_experience"
 
-    def build_score_expression(self, job: JobRequest):
-        availability_level = self._availability_level_expression(job)
-        experience_years = self._experience_years_expression()
-        rate_band = self._rate_band_expression()
-
-        availability_score = case(
-            (availability_level == 2, 30),
-            (availability_level == 1, 15),
-            else_=0,
-        )
-        exp_priority = func.least(experience_years * 4, 40)
-        rate_score = case(
-            (rate_band == 4, 10),
-            (rate_band == 3, 7),
-            (rate_band == 2, 4),
-            (rate_band == 1, 1),
-            else_=0,
-        )
-
-        return (
-            literal(30)
-            + availability_score
-            + exp_priority
-            + rate_score
-        ).label("score")
-
-    def score_cleaner(self, job: JobRequest, user: User, profile: CleanerProfile) -> float:
-        if not self._service_type_matches(job, profile):
-            return 0.0
-
-        availability_level = self._availability_level(job, profile)
-        availability_score = 30.0 if availability_level == 2 else 15.0 if availability_level == 1 else 0.0
-
-        exp_score = float(min(self._experience_years(profile) * 4, 40))
-        rate_score = {4: 10.0, 3: 7.0, 2: 4.0, 1: 1.0}.get(self._rate_band(profile), 0.0)
-
-        return 30.0 + availability_score + exp_score + rate_score
+    def build_order_by(self, job: JobRequest):
+        return [
+            self._experience_years_expression().desc(),
+            self._hourly_rate_nulls_last_expression().asc(),
+            CleanerProfile.hourly_rate.asc(),
+            User.id.asc(),
+        ]
 
 
 class MatchingService:
@@ -373,26 +226,22 @@ class MatchingService:
 
     @staticmethod
     def _format_matches(matches) -> List[Dict[str, Any]]:
-        scored: List[Dict[str, Any]] = []
+        formatted: List[Dict[str, Any]] = []
         for match in matches:
-            if match.score <= 0:
-                continue
-
             if match.first_name and match.last_name:
                 name = f"{match.first_name} {match.last_name}"
             else:
                 name = match.email
 
-            scored.append({
+            formatted.append({
                 "cleaner_id": match.cleaner_id,
                 "email": match.email,
                 "name": name,
                 "service_type": match.service_type.value,
                 "hourly_rate": float(match.hourly_rate) if match.hourly_rate else None,
                 "years_experience": match.years_experience,
-                "score": float(match.score),
             })
-        return scored
+        return formatted
 
     @classmethod
     def find_matching_cleaners(
@@ -409,7 +258,7 @@ class MatchingService:
         """
         job = cls._load_pending_job(job_request_id, user_id, role)
         strategy = cls._resolve_strategy(strategy_name)
-        score_expr = strategy.build_score_expression(job)
+        availability_is_eligible = strategy._availability_is_eligible_expression(job)
         booked_overlap_exists = cls._build_booked_overlap_exists(job)
 
         matches = (
@@ -421,7 +270,6 @@ class MatchingService:
                 CleanerProfile.service_type.label("service_type"),
                 CleanerProfile.hourly_rate.label("hourly_rate"),
                 CleanerProfile.years_experience.label("years_experience"),
-                score_expr,
             )
             .join(CleanerProfile, User.id == CleanerProfile.user_id)
             .outerjoin(UserProfile, User.id == UserProfile.user_id)
@@ -429,9 +277,10 @@ class MatchingService:
                 User.role == UserRole.cleaner,
                 User.is_banned.is_(False),
                 CleanerProfile.service_type == job.service_type,
+                availability_is_eligible,
                 ~booked_overlap_exists,
             )
-            .order_by(score_expr.desc())
+            .order_by(*strategy.build_order_by(job))
             .limit(5)
             .all()
         )
@@ -468,12 +317,3 @@ class MatchingService:
             "assigned_cleaner": best,
             "strategy": result["strategy"],
         }
-
-    @classmethod
-    def _score_cleaner(cls, job: JobRequest, user: User, profile: CleanerProfile) -> float:
-        """
-        Compatibility wrapper for existing tests and internal callers.
-        This delegates to the default concrete strategy via the context.
-        """
-        strategy = cls._resolve_strategy()
-        return strategy.score_cleaner(job, user, profile)
